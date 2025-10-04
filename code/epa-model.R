@@ -1,46 +1,73 @@
-library(dplyr)
-library(stringr)
+##################
+### REFERENCES ###
+##################
 
-setwd("/Users/kennywatts/Downloads")
-
-phase_data <- read.csv("Premiership Rugby 2018-19 Phase Data.csv")
-
-## Links to Data
-# https://www.data-ruck.com/blog/predicting-kicks-outcome/?utm_source=chatgpt.com
+## Links to Article
+# https://www.data-ruck.com/blog/predicting-kicks-outcome/
 # https://journals.sagepub.com/doi/10.1177/22150218251365220
 
+## Data Download Link
+# https://zenodo.org/api/records/13851563/files-archive
+
+
+################
+### PACKAGES ###
+################
+
+# install.packages("patchwork")
+library(patchwork)
+
+# install.packages("stringr")
+library(stringr)
+
+# install.packages("tidyverse")
+library(tidyverse)
+
+
+#################
+### DATA LOAD ###
+#################
+
+# run from project directory (or within .Rproj)
+phase_data = read_csv("data/phase_2018-19.csv")
+# preview data
 head(phase_data)
 
-# Investigating Data
+########################
+### DATA EXPLORATION ###
+#######################
 
+# location where the phase began, determined determined by the metre lines dividing the pitch pitch
 unique(phase_data$Location)
-# The location on the pitch where the phase began, determined by the metre lines dividing the rugby union pitch.
 
+# period between subsequent rucks
 unique(phase_data$Phase)
-# Period between subsequent rucks
 
+# location on the pitch where the phase began, determined by the lineout lines dividing the pitch
 unique(phase_data$Side)
-# The location on the pitch where the phase began, determined by the lineout lines dividing the rugby union pitch.
 
+# how did the play start?
 unique(phase_data$Play_Start)
-# Type of way the play started
 
+# upon scoring, the event was assigned to all phases since the previous scoring event
 unique(phase_data$Outcome)
-# Upon scoring, the event (e.g., tries, penalty kicks, drop goals or end of the half) was assigned to all phases since the previous scoring event.
 
+# points difference (I'm assuming for whoever has possession of the ball)
+## oftentimes this is from perspective of the home team, but if it flips back and forth w/ possession then you're right
 unique(phase_data$Points_Difference)
-# The points difference (I'm assuming for whoever has possession of the ball)
 
+# remove card data
 phase_data <- phase_data %>%
   select(-Red_Cards_Own, -Red_Cards_Opp, -Yellow_Cards_Own, -Yellow_Cards_Opp)
 
+# get restarts
 restarts <- phase_data %>%
   filter(Play_Start == "Restart Kick", Phase ==1)
 
+# list of unique restart locations
 unique(restarts$Location)
 
-# Finding Penalty Kicks and Their locations
-
+# successfulpenalty kicks and locations
 successful_penalty_kicks <- phase_data %>%
   arrange(ID) %>% 
   mutate(
@@ -57,17 +84,16 @@ successful_penalty_kicks <- phase_data %>%
       TRUE ~ prev_location
     )
   ) %>%
+  # isolate for 3-point scores
   filter(
     abs(score_change) == 3
   ) %>%
   select(ID, Round, Home, Away, Location, prev_location, prev_team, prev_side, Points_Difference, Outcome)
-
+# preview data
 print(successful_penalty_kicks)
 
 
-# Mapping Successful Penalty Kicks
-
-library(ggplot2)
+# mapping successful penalty kicks
 
 zone_levels <- c("Goal-5m (own)", "5m-22m (own)", "22m-10m (own)", "10m-Half (own)",
                  "Half-10m (opp)", "10m-22m (opp)", "22m-5m (opp)", "5m-Goal (opp)")
@@ -95,14 +121,14 @@ ggplot(field_counts, aes(x = prev_side, y = prev_location, fill = n)) +
     plot.title = element_text(hjust = 0.5, face = "bold")
   )
 
-# Expected Points of lineout in different locations
+# expected points of lineout in different locations
 
 phase_data <- phase_data %>%
   mutate(
-    # Extract signed numbers inside parentheses: (+3), (-3), etc.
+    # extract signed numbers inside parentheses: (+3), (-3), etc.
     points = str_extract(Outcome, "[-+]?\\d+") %>% as.numeric(),
     
-    # Handle cases with no number (e.g. "No Score", turnovers)
+    # handle cases with no number (e.g. "no score", turnovers)
     points = ifelse(is.na(points), 0, points)
   )
 
@@ -147,30 +173,25 @@ ggplot(df, aes(x = y_mid, y = avg_points)) +
   ) +
   theme_minimal()
 
-####
 
-library(ggplot2)
-library(dplyr)
-
-# Coefficients from logistic regression
+# coefficients from logistic regression
 beta_angle <- 0.45
 beta_distance <- -0.022
 intercept <- -1.78
-
-library(dplyr)
 
 x_vals <- seq(-35, 35, by = 1)
 y_vals <- seq(5, 60, by = 1)
 grid <- expand.grid(x = x_vals, y = y_vals)
 
+# SET THIS AS DEFAULT VALUE, CORRECT IF NOT SO
 post_half_width <- 2.81
 
-# Logistic function
+# logistic function
 logit_prob <- function(angle, distance) {
   1 / (1 + exp(-(beta_angle * angle + beta_distance * distance + intercept)))
 }
 
-compute_expected_points <- function(x, y, post_half_width) {
+compute_expected_points <- function(x, y, post_half_width = 2.81) {
   # positions of the posts along the x-axis
   left_post_x  <- -post_half_width
   right_post_x <-  post_half_width
@@ -191,8 +212,8 @@ compute_expected_points <- function(x, y, post_half_width) {
 
 grid <- grid %>%
   mutate(
-    prob_raw_pos = compute_expected_points(x, y, k),
-    prob_raw_neg = compute_expected_points(-x, y, k),  # mirror kicker position
+    prob_raw_pos = compute_expected_points(x, y),
+    prob_raw_neg = compute_expected_points(-x, y),  # mirror kicker position
     prob_raw_max = pmax(prob_raw_pos, prob_raw_neg)
   ) %>%
   mutate(
@@ -201,7 +222,7 @@ grid <- grid %>%
   )
 
 
-# Plot symmetric heatmap
+# plot symmetric heatmap
 thresholds <- c(0.8, 0.6, 0.4, 0.2)
 
 ggplot(grid, aes(x = x, y = y, fill = prob)) +
@@ -233,9 +254,7 @@ ggplot(grid, aes(x = x, y = y, fill = expected_points)) +
   theme_minimal()
 
 
-# Including Lineout Expected Points
-library(dplyr)
-library(ggplot2)
+# lineout expected points
 
 expected_points_by_zone <- tibble(
   Location = c("10m-22m (opp)", "22m-5m (opp)", "5m-Goal (opp)", "Half-10m (opp)"),
@@ -243,7 +262,7 @@ expected_points_by_zone <- tibble(
   avg_points = c(1.25, 2.04, 3.74, 0.879)
 )
 
-# Fit quadratic function
+# fit quadratic function
 quad_fit <- lm(avg_points ~ poly(y_mid, 2, raw = TRUE), data = expected_points_by_zone)
 
 y_dense <- seq(min(expected_points_by_zone$y_mid),
@@ -269,7 +288,7 @@ grid <- grid %>%
     point_diff = expected_points - avg_points_interp
   )
 
-# Graph of if the lineout takes place at the same distance from goal as kick
+# graph of if the lineout takes place at the same distance from goal as kick
 ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
@@ -287,9 +306,7 @@ ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
   ) +
   theme_minimal()
 
-# With a y shift
-
-library(patchwork)
+# with a y shift
 
 y_shifts <- c(0, -5, -10, -15, -20)
 
@@ -324,4 +341,3 @@ plots[[2]]
 plots[[3]]
 plots[[4]]
 plots[[5]]
-
