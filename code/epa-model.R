@@ -107,7 +107,7 @@ successful_penalty_kicks <- successful_penalty_kicks %>%
 field_counts <- successful_penalty_kicks %>%
   count(prev_location, prev_side)
 
-ggplot(field_counts, aes(x = prev_side, y = prev_location, fill = n)) +
+p1 <- ggplot(field_counts, aes(x = prev_side, y = prev_location, fill = n)) +
   geom_tile(color = "black") +
   geom_text(aes(label = n), color = "white", size = 5) +
   scale_fill_gradient(low = "lightblue", high = "darkblue") +
@@ -120,6 +120,8 @@ ggplot(field_counts, aes(x = prev_side, y = prev_location, fill = n)) +
     axis.text.y = element_text(size = 12),
     plot.title = element_text(hjust = 0.5, face = "bold")
   )
+
+ggsave("plots/penalty_kicks_by_position.png", p1, width = 10, height = 8, dpi = 300)
 
 # expected points of lineout in different locations
 
@@ -163,7 +165,7 @@ df <- tibble::tibble(
   avg_points = c(1.25, 2.04, 3.74, 0.879)
 )
 
-ggplot(df, aes(x = y_mid, y = avg_points)) +
+p2 <- ggplot(df, aes(x = y_mid, y = avg_points)) +
   geom_point(size = 3, color = "red") +
   geom_line(group = 1, color = "blue") +
   labs(
@@ -172,6 +174,8 @@ ggplot(df, aes(x = y_mid, y = avg_points)) +
     y = "Average Points"
   ) +
   theme_minimal()
+
+ggsave("plots/expected_points_by_zone.png", p2, width = 10, height = 6, dpi = 300)
 
 
 # coefficients from logistic regression
@@ -225,7 +229,7 @@ grid <- grid %>%
 # plot symmetric heatmap
 thresholds <- c(0.8, 0.6, 0.4, 0.2)
 
-ggplot(grid, aes(x = x, y = y, fill = prob)) +
+p3 <- ggplot(grid, aes(x = x, y = y, fill = prob)) +
   geom_tile() +
   geom_contour(aes(z = prob),
                breaks = thresholds,
@@ -241,8 +245,9 @@ ggplot(grid, aes(x = x, y = y, fill = prob)) +
   ) +
   theme_minimal()
 
+ggsave("plots/kick_success_probability.png", p3, width = 12, height = 10, dpi = 300)
 
-ggplot(grid, aes(x = x, y = y, fill = expected_points)) +
+p4 <- ggplot(grid, aes(x = x, y = y, fill = expected_points)) +
   geom_tile() +
   scale_fill_viridis_c(option = "magma", name = "Expected Points") +
   coord_fixed() +
@@ -252,6 +257,8 @@ ggplot(grid, aes(x = x, y = y, fill = expected_points)) +
     y = "Distance from goal line (m)"
   ) +
   theme_minimal()
+
+ggsave("plots/expected_points_heatmap.png", p4, width = 12, height = 10, dpi = 300)
 
 
 # lineout expected points
@@ -270,13 +277,15 @@ y_dense <- seq(min(expected_points_by_zone$y_mid),
 
 fitted_dense <- predict(quad_fit, newdata = data.frame(y_mid = y_dense))
 
-ggplot() +
+p5 <- ggplot() +
   geom_point(data = expected_points_by_zone, aes(x = y_mid, y = avg_points), color = "blue") +
   geom_line(aes(x = y_dense, y = fitted_dense), color = "red", linewidth = 1) +
   labs(title = "Quadratic Fit to Average Points by Zone",
        x = "y_mid",
        y = "Average Points") +
   theme_minimal()
+
+ggsave("plots/quadratic_fit.png", p5, width = 10, height = 6, dpi = 300)
 
 interpolate_quad <- function(x) {
   predict(quad_fit, newdata = data.frame(y_mid = x))
@@ -289,7 +298,7 @@ grid <- grid %>%
   )
 
 # graph of if the lineout takes place at the same distance from goal as kick
-ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
+p6 <- ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
     low = "#457B9D",    # darker blue for negative
@@ -306,6 +315,8 @@ ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
   ) +
   theme_minimal()
 
+ggsave("plots/kick_vs_lineout_comparison.png", p6, width = 12, height = 10, dpi = 300)
+
 # with a y shift
 
 y_shifts <- c(0, -5, -10, -15, -20)
@@ -318,7 +329,7 @@ plots <- lapply(y_shifts, function(shift) {
       point_diff = expected_points - avg_points_interp
     )
   
-  ggplot(grid_shifted, aes(x = x, y = y, fill = point_diff)) +
+  p <- ggplot(grid_shifted, aes(x = x, y = y, fill = point_diff)) +
     geom_tile() +
     scale_fill_gradient2(
       low = "#457B9D",    # darker blue for negative
@@ -334,10 +345,10 @@ plots <- lapply(y_shifts, function(shift) {
       y = "Distance from goal line (m)"
     ) +
     theme_minimal()
+  
+  # Save each plot
+  filename <- paste0("plots/kick_vs_lineout_shift_", abs(shift), "m.png")
+  ggsave(filename, p, width = 12, height = 10, dpi = 300)
+  
+  p
 })
-
-plots[[1]]
-plots[[2]]
-plots[[3]]
-plots[[4]]
-plots[[5]]
