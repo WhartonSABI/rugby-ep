@@ -23,6 +23,8 @@ library(stringr)
 # install.packages("tidyverse")
 library(tidyverse)
 
+# install.packages("dplyr")
+library(dplyr)
 
 #################
 ### DATA LOAD ###
@@ -37,7 +39,7 @@ head(phase_data)
 ### DATA EXPLORATION ###
 #######################
 
-# location where the phase began, determined determined by the metre lines dividing the pitch pitch
+# location where the phase began, determined determined by the metre lines dividing the pitch
 unique(phase_data$Location)
 
 # period between subsequent rucks
@@ -56,8 +58,14 @@ unique(phase_data$Outcome)
 ## oftentimes this is from perspective of the home team, but if it flips back and forth w/ possession then you're right
 unique(phase_data$Points_Difference)
 
-# remove card data
+# remove instances when cards occur
 phase_data <- phase_data %>%
+  filter(
+    Red_Cards_Own == 0,
+    Red_Cards_Opp == 0,
+    Yellow_Cards_Own == 0,
+    Yellow_Cards_Opp == 0
+  ) %>%
   select(-Red_Cards_Own, -Red_Cards_Opp, -Yellow_Cards_Own, -Yellow_Cards_Opp)
 
 # get restarts
@@ -259,6 +267,64 @@ p4 <- ggplot(grid, aes(x = x, y = y, fill = expected_points)) +
   theme_minimal()
 
 ggsave("plots/expected_points_heatmap.png", p4, width = 12, height = 10, dpi = 300)
+
+
+
+# Expected Points after Penalty miss (drop kick from opposition 22m)
+
+all_restarts <- restarts
+
+head(all_restarts)
+table(all_restarts$Location)
+
+# Need to Remove All Restarts After Tries and Penalties
+
+restarts_not_after_score <- phase_data %>%
+  mutate(
+    prev_ID = lag(ID),
+    prev_Points = lag(Points_Difference),
+    prev_Play = lag(Play_Start),
+    prev_Team_In_Poss = lag(Team_In_Poss)
+  ) %>%
+  filter(
+    Phase == 1,
+    Play_Start == "Restart Kick",
+    !is.na(prev_ID),
+    abs(Points_Difference - prev_Points) == 0
+  )
+
+head(restarts_not_after_score)
+table(restarts_not_after_score$Location)
+
+# NOTE these could be a goal line drop or a 22m drop
+
+# Filtering out unreasonable locations
+
+restarts_not_after_score <- restarts_not_after_score %>%
+  filter(Location %in% c("10m-22m (opp)", "10m-Half (own)", "22m-10m (own)", "Half-10m (opp)"))
+
+# Looking at restart expected points
+avg_points_by_location_restarts <- restarts_not_after_score %>%
+  group_by(Location) %>%
+  summarise(n =n(),
+    avg_expected_points = mean(points, na.rm = TRUE)) %>%
+  arrange(desc(avg_expected_points))
+
+print(avg_points_by_location_restarts)
+
+overall_avg_points_restarts <- restarts_not_after_score %>%
+  summarise(overall_avg_expected_points = mean(points, na.rm = TRUE))
+
+print(overall_avg_points_restarts)
+
+# Expected points if we assume it lands within 10m of halfway line
+
+avg_points_restarts_within_10m_lines <- restarts_not_after_score %>%
+  filter(Location %in% c("Half-10m (opp)", "10m-Half (own)")) %>%
+  summarise(expected_points_restarts_within_10m_lines = mean(points, na.rm = TRUE))
+
+print(avg_points_restarts_within_10m_lines)
+
 
 
 # lineout expected points
