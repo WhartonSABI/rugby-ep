@@ -178,7 +178,7 @@ p2 <- ggplot(df, aes(x = y_mid, y = avg_points)) +
 ggsave("plots/expected_points_by_zone.png", p2, width = 10, height = 6, dpi = 300)
 
 
-# coefficients from logistic regression
+# coefficients from logistic regression (REPLICATE THIS)
 beta_angle <- 0.45
 beta_distance <- -0.022
 intercept <- -1.78
