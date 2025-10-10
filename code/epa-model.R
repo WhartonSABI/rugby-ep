@@ -142,7 +142,16 @@ phase_data <- phase_data %>%
     points = ifelse(is.na(points), 0, points)
   )
 
-zones <- c("Half-10m (opp)", "10m-22m (opp)", "22m-5m (opp)", "5m-Goal (opp)")
+zones <- c(
+  "5m-Goal (opp)",
+  "22m-5m (opp)",
+  "10m-22m (opp)",
+  "Half-10m (opp)",
+  "10m-Half (own)",
+  "22m-10m (own)",
+  "5m-22m (own)",
+  "Goal-5m (own)"
+)
 
 lineouts_clean <- phase_data %>%
   filter(
@@ -167,6 +176,34 @@ expected_points_by_zone <- lineouts_clean %>%
 )
 
 print(expected_points_by_zone)
+
+# Expected Points of Lineout All Areas of the pitch
+
+zones_order <- c(
+  "5m-Goal (opp)",
+  "22m-5m (opp)",
+  "10m-22m (opp)",
+  "Half-10m (opp)",
+  "10m-Half (own)",
+  "22m-10m (own)",
+  "5m-22m (own)",
+  "Goal-5m (own)"
+)
+
+expected_points_by_zone <- expected_points_by_zone %>%
+  mutate(Location = factor(Location, levels = zones_order))
+
+ggplot(expected_points_by_zone, aes(x = Location, y = avg_points)) +
+  geom_point(aes(size = n_phases)) +
+  geom_text(aes(label = round(avg_points, 2)), vjust = -1.2, size = 3) +
+  scale_size_continuous(name = "Count (n)") +
+  labs(
+    title = "Average Expected Points by Location (point size = count)",
+    x = "Location",
+    y = "Average Expected Points"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 df <- tibble::tibble(
   y_mid = c(31, 13.5, 2.5, 45),
