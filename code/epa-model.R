@@ -190,20 +190,49 @@ zones_order <- c(
   "Goal-5m (own)"
 )
 
-expected_points_by_zone <- expected_points_by_zone %>%
-  mutate(Location = factor(Location, levels = zones_order))
+expected_points_by_zone <- lineouts_clean %>%
+  group_by(Location) %>%
+  summarise(
+    n_phases = n(),
+    avg_points = mean(points, na.rm = TRUE),
+    total_points = sum(points, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(Location = factor(Location, levels = zones_order)) %>%
+  arrange(Location)
 
-ggplot(expected_points_by_zone, aes(x = Location, y = avg_points)) +
-  geom_point(aes(size = n_phases)) +
-  geom_text(aes(label = round(avg_points, 2)), vjust = -1.2, size = 3) +
-  scale_size_continuous(name = "Count (n)") +
+# Print Table
+print(expected_points_by_zone)
+
+# Plot of Meteres vs Expected Points of Lineout
+
+zone_meters <- c(2.5, 13.5, 31, 45, 55, 69, 86.5, 97.5)
+
+expected_points_by_zone$Location <- factor(expected_points_by_zone$Location, levels = zones_order)
+expected_points_by_zone$meter_x <- zone_meters[match(as.character(expected_points_by_zone$Location), zones_order)]
+
+lineout_plot <- ggplot(expected_points_by_zone, aes(x = meter_x, y = avg_points)) +
+  geom_point(size = 2) +
+  geom_text(aes(label = round(avg_points, 2)), vjust = -1.2, size = 3, check_overlap = TRUE) +
+  geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = FALSE, linewidth = 0.8) +
+  scale_x_continuous(
+    breaks = zone_meters,
+    labels = zones_order,
+    expand = expansion(add = c(3, 3)),
+    limits = c(0, 100)  # ensures full field range
+  ) +
   labs(
-    title = "Average Expected Points by Location (point size = count)",
-    x = "Location",
+    title = "Average Points by Lineout Location (Quadratic Fit, Increasing Distance from Opposition Goal Line)",
+    x = "Field Position (meters)",
     y = "Average Expected Points"
   ) +
   theme_minimal(base_size = 12) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title.x = element_text(margin = margin(t = 8))
+  )
+
+ggsave("plots/lineout_plot.png", lineout_plot, width = 10, height = 6, dpi = 300)
 
 df <- tibble::tibble(
   y_mid = c(31, 13.5, 2.5, 45),
@@ -330,21 +359,23 @@ restarts_not_after_score <- phase_data %>%
     abs(Points_Difference - prev_Points) == 0
   )
 
+
+
 head(restarts_not_after_score)
 table(restarts_not_after_score$Location)
 
-# NOTE these could be a goal line drop or a 22m drop
+######
+#Need to filter out kicks from restarts at beginning of half/game
+######
 
 # Filtering out unreasonable locations
 
-restarts_not_after_score <- restarts_not_after_score %>%
-  filter(Location %in% c("10m-22m (opp)", "10m-Half (own)", "22m-10m (own)", "Half-10m (opp)"))
-
-# Looking at restart expected points
 avg_points_by_location_restarts <- restarts_not_after_score %>%
   group_by(Location) %>%
-  summarise(n =n(),
-    avg_expected_points = mean(points, na.rm = TRUE)) %>%
+  summarise(
+    n = n(),
+    avg_expected_points = mean(points, na.rm = TRUE)
+  ) %>%
   arrange(desc(avg_expected_points))
 
 print(avg_points_by_location_restarts)
@@ -353,6 +384,7 @@ overall_avg_points_restarts <- restarts_not_after_score %>%
   summarise(overall_avg_expected_points = mean(points, na.rm = TRUE))
 
 print(overall_avg_points_restarts)
+
 
 # Expected points if we assume it lands within 10m of halfway line
 
