@@ -9,6 +9,9 @@
 ## Data Download Link
 # https://zenodo.org/api/records/13851563/files-archive
 
+# Goal Kicking Data
+# https://www.sciencedirect.com/science/article/pii/S1440244014000255
+
 
 ################
 ### PACKAGES ###
@@ -296,7 +299,7 @@ grid <- grid %>%
   ) %>%
   mutate(
     prob = prob_raw_max / max(prob_raw_max),
-    expected_points = prob * 3
+    expected_points = prob * 3 + (1-prob)*0.46    # 0.46 obtained from expected points following a 22 meter drop out
   )
 
 
@@ -356,7 +359,8 @@ restarts_not_after_score <- phase_data %>%
     Phase == 1,
     Play_Start == "Restart Kick",
     !is.na(prev_ID),
-    abs(Points_Difference - prev_Points) == 0
+    abs(Points_Difference - prev_Points) == 0,
+    Seconds_Remaining < 4795
   )
 
 
@@ -364,9 +368,6 @@ restarts_not_after_score <- phase_data %>%
 head(restarts_not_after_score)
 table(restarts_not_after_score$Location)
 
-######
-#Need to filter out kicks from restarts at beginning of half/game
-######
 
 # Filtering out unreasonable locations
 
@@ -384,16 +385,6 @@ overall_avg_points_restarts <- restarts_not_after_score %>%
   summarise(overall_avg_expected_points = mean(points, na.rm = TRUE))
 
 print(overall_avg_points_restarts)
-
-
-# Expected points if we assume it lands within 10m of halfway line
-
-avg_points_restarts_within_10m_lines <- restarts_not_after_score %>%
-  filter(Location %in% c("Half-10m (opp)", "10m-Half (own)")) %>%
-  summarise(expected_points_restarts_within_10m_lines = mean(points, na.rm = TRUE))
-
-print(avg_points_restarts_within_10m_lines)
-
 
 
 # lineout expected points
