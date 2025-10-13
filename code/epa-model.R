@@ -299,7 +299,7 @@ grid <- grid %>%
   ) %>%
   mutate(
     prob = prob_raw_max / max(prob_raw_max),
-    expected_points = prob * 3 + (1-prob)*0.46    # 0.46 obtained from expected points following a 22 meter drop out
+    expected_points = prob * 3 + (1-prob)*0.604    # 0.46 obtained from expected points following a 22 meter drop out
   )
 
 
@@ -360,7 +360,8 @@ restarts_not_after_score <- phase_data %>%
     Play_Start == "Restart Kick",
     !is.na(prev_ID),
     abs(Points_Difference - prev_Points) == 0,
-    Seconds_Remaining < 4795
+    Seconds_Remaining < 4795,
+    !between(Seconds_Remaining, 2390, 2400)
   )
 
 
