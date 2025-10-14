@@ -248,14 +248,14 @@ grid <- grid %>%
 
 summary(grid$prob)
 
-library(ggplot2)
-thresholds <- c(0.5, 0.6, 0.7, 0.8, 0.9)
-ggplot(grid, aes(x = x + 35, y = y, fill = prob)) +   # +35 to convert centered x back to 0-70 if desired
+
+GAM_plot <- ggplot(grid, aes(x = x, y = y, fill = prob)) +   # +35 to convert centered x back to 0-70 if desired
   geom_tile() +
-  geom_contour(aes(z = prob), breaks = thresholds, color = "white", linewidth = 0.6, linetype = "dashed") +
   scale_fill_viridis_c(option = "magma", name = "GAM Prob") +
   coord_fixed() + theme_minimal() +
-  labs(title = "GAM predicted probability of success", x = "Lateral position (m)", y = "Distance from goal line (m)")
+  labs(title = "Kick Success Probability", x = "Lateral position (m)", y = "Distance from goal line (m)")
+
+ggsave("plots/Kick Success Probability Plot.png", GAM_plot, width = 12, height = 10, dpi = 300)
 
 
 # Expected Points after Penalty miss (drop kick from opposition 22m)
@@ -398,5 +398,3 @@ plots <- lapply(y_shifts, function(shift) {
   
   p
 })
-
-
