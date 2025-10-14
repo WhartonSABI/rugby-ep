@@ -254,7 +254,6 @@ p2 <- ggplot(df, aes(x = y_mid, y = avg_points)) +
 
 ggsave("plots/expected_points_by_zone.png", p2, width = 10, height = 6, dpi = 300)
 
-
 # coefficients from logistic regression (REPLICATE THIS)
 beta_angle <- 0.45
 beta_distance <- -0.022
@@ -299,7 +298,7 @@ grid <- grid %>%
   ) %>%
   mutate(
     prob = prob_raw_max / max(prob_raw_max),
-    expected_points = prob * 3 + (1-prob)*0.604    # 0.46 obtained from expected points following a 22 meter drop out
+    expected_points = prob * 3 + (1-prob)*0.604    # 6.04 obtained from expected points following a 22 meter drop out
   )
 
 

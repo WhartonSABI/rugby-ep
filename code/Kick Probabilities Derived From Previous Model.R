@@ -112,4 +112,35 @@ ggplot(grid, aes(x = x, y = y, fill = prob)) +
   theme_minimal()
 
 
+### Smoothing Function
+
+library(mgcv)
+
+gam_model <- gam(pred_prob_frac ~ te(kicking_angle, distance_to_center),
+                 data = penalty_long,
+                 family = quasibinomial(link = "logit"),
+                 method = "REML")
+
+summary(gam_model)
+
+penalty_long <- penalty_long %>% mutate(predicted_gam = predict(gam_model, type = "response"))
+
+ggplot(penalty_long, aes(x = pred_prob_frac, y = predicted_gam)) +
+  geom_point(alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Actual prob", y = "GAM predicted prob", title = "Actual vs GAM predicted")
+
+# Predict on grid (use same grid you created)
+grid <- grid %>%
+  mutate(prob_gam = predict(gam_model, newdata = ., type = "response"))
+
+thresholds <- c(0.5, 0.6, 0.7, 0.8, 0.9)
+ggplot(grid, aes(x = x, y = y, fill = prob_gam)) +
+  geom_tile() +
+  geom_contour(aes(z = prob_gam), breaks = thresholds, color = "white", linewidth = 0.8, linetype = "dashed") +
+  scale_fill_viridis_c(option = "magma", name = "Expected Prob") +
+  coord_fixed() + theme_minimal() +
+  labs(title = "GAM smoothed probability surface", x = "Lateral position (m)", y = "Distance from goal line (m)")
+
+
 
