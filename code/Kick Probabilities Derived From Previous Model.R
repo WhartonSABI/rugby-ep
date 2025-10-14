@@ -142,5 +142,6 @@ ggplot(grid, aes(x = x, y = y, fill = prob_gam)) +
   coord_fixed() + theme_minimal() +
   labs(title = "GAM smoothed probability surface", x = "Lateral position (m)", y = "Distance from goal line (m)")
 
-
+saved_gam <- "gam_model.rds"
+saveRDS(gam_model, saved_gam)
 
