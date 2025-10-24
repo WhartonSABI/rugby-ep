@@ -209,6 +209,9 @@ print(expected_points_by_zone)
 
 # Plot of Meteres vs Expected Points of Lineout
 
+field_lines <- c(5, 22, 40, 50, 60, 78, 95)
+line_names <- c("5m (opp)", "22m (opp)", "10m (opp)", "Half", "10m (own)", "22m (own)", "5m (own)")
+
 zone_meters <- c(2.5, 13.5, 31, 45, 55, 69, 86.5, 97.5)
 
 expected_points_by_zone$Location <- factor(expected_points_by_zone$Location, levels = zones_order)
@@ -219,8 +222,8 @@ lineout_plot <- ggplot(expected_points_by_zone, aes(x = meter_x, y = avg_points)
   geom_text(aes(label = round(avg_points, 2)), vjust = -1.2, size = 3, check_overlap = TRUE) +
   geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = FALSE, linewidth = 0.8) +
   scale_x_continuous(
-    breaks = zone_meters,
-    labels = zones_order,
+    breaks = field_lines,
+    labels = line_names,
     expand = expansion(add = c(3, 3)),
     limits = c(0, 100)  # ensures full field range
   ) +
