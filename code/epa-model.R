@@ -217,10 +217,20 @@ zone_meters <- c(2.5, 13.5, 31, 45, 55, 69, 86.5, 97.5)
 expected_points_by_zone$Location <- factor(expected_points_by_zone$Location, levels = zones_order)
 expected_points_by_zone$meter_x <- zone_meters[match(as.character(expected_points_by_zone$Location), zones_order)]
 
+# Computing Quadratic Minimum
+
+quad_fit_tmp <- lm(avg_points ~ poly(meter_x, 2), data = expected_points_by_zone)
+grid_x <- seq(min(expected_points_by_zone$meter_x, na.rm = TRUE),
+              max(expected_points_by_zone$meter_x, na.rm = TRUE),
+              length.out = 2000)
+pred_tmp <- predict(quad_fit_tmp, newdata = data.frame(meter_x = grid_x))
+
+cap_x <- grid_x[which.min(pred_tmp)]
+
 lineout_plot <- ggplot(expected_points_by_zone, aes(x = meter_x, y = avg_points)) +
   geom_point(size = 2) +
   geom_text(aes(label = round(avg_points, 2)), vjust = -1.2, size = 3, check_overlap = TRUE) +
-  geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = FALSE, linewidth = 0.8) +
+  geom_smooth(method = "lm", formula = y ~ poly(pmin(x,  cap_x), 2), se = FALSE, linewidth = 0.8) +
   scale_x_continuous(
     breaks = field_lines,
     labels = line_names,
@@ -235,7 +245,7 @@ lineout_plot <- ggplot(expected_points_by_zone, aes(x = meter_x, y = avg_points)
   theme_minimal(base_size = 12) +
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1),
-    axis.title.x = element_text(margin = margin(t = 8))
+    axis.title.x = element_text(margin = ggplot2::margin(t = unit(8, "pt")))
   )
 
 ggsave("plots/lineout_plot.png", lineout_plot, width = 10, height = 6, dpi = 300)
@@ -448,7 +458,7 @@ ggsave("plots/kick_vs_lineout_comparison.png", p6, width = 12, height = 10, dpi 
 
 # with a y shift
 
-y_shifts <- c(0, -5, -10, -15, -20)
+y_shifts <- c(0, -5, -10, -15, -20, -25)
 
 plots <- lapply(y_shifts, function(shift) {
   
@@ -481,3 +491,36 @@ plots <- lapply(y_shifts, function(shift) {
   
   p
 })
+
+# All Blacks vs South Africa Game
+
+sep_game_data = read_csv("data/All Blacks vs South Africa Game Sep 16th.csv")
+
+sep_game_data <- sep_game_data %>%
+  rename(
+    x = `x location`,
+    y = `y location`
+  ) %>%
+  mutate(
+    x = x - 35
+  )
+  
+sep_game_data <- sep_game_data %>%
+  left_join(grid, by = c("x", "y"))
+
+sep_game_data <- sep_game_data %>%
+  mutate(
+    optimal_decision = if_else(point_diff > 0, "lineout", "kick")
+  )
+
+decision_tbl <- sep_game_data %>%
+  select(Decision, optimal_decision, point_diff)
+print(decision_tbl)
+
+decision_tbl <- decision_tbl %>%
+  mutate(
+    missed_points = if_else(Decision == optimal_decision, 0, point_diff)
+  )
+print(decision_tbl)
+
+sum(abs(decision_tbl$missed_points))
