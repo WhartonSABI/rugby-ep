@@ -492,6 +492,56 @@ plots <- lapply(y_shifts, function(shift) {
   p
 })
 
+# Specific y shift and decision marker
+
+y_shift <- -15
+
+marker_x <- -20
+marker_y <- 30
+
+grid_shifted <- grid %>%
+  mutate(
+    avg_points_interp = pmin(interpolate_quad(y + y_shift), 3.74),
+    point_diff = expected_points - avg_points_interp
+  )
+
+decision_marker <- ggplot(grid_shifted, aes(x = x, y = y, fill = point_diff)) +
+  geom_tile() +
+  scale_fill_gradient2(
+    low = "#457B9D",    # darker blue for negative
+    mid = "white",       # zero
+    high = "#E76F51",   # darker orange/red for positive
+    midpoint = 0,
+    name = "Kick vs Lineout"
+  ) +
+  coord_fixed() +
+  labs(
+    title = paste("Expected Points Difference: Kick vs Lineout (Lineout", y_shift, "m)"),
+    x = "Lateral position (m)",
+    y = "Distance from goal line (m)"
+  ) +
+  theme_minimal() +
+  # Add your marker
+  geom_point(aes(x = marker_x, y = marker_y), color = "black", size = 4, shape = 4, stroke = 1.2)
+
+ggsave("plots/kick_vs_lineout_shift_15m_marker.png", decision_marker, width = 12, height = 10, dpi = 300)
+
+decision_marker
+
+marker_value <- grid_shifted %>%
+  filter(x == marker_x, y == marker_y) %>%
+  select(expected_points, avg_points_interp, point_diff)
+
+marker_value <- marker_value %>%
+  mutate(
+    expected_points = round(expected_points, 2),
+    avg_points_interp = round(avg_points_interp, 2),
+    point_diff = round(point_diff, 2)
+  )
+
+marker_value
+
+
 # All Blacks vs South Africa Game
 
 sep_game_data = read_csv("data/All Blacks vs South Africa Game Sep 16th.csv")
