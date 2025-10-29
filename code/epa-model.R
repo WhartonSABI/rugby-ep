@@ -574,3 +574,50 @@ decision_tbl <- decision_tbl %>%
 print(decision_tbl)
 
 sum(abs(decision_tbl$missed_points))
+
+# Graphing Decision Boundary
+
+marker_x <- -20
+marker_y <- 30
+y_shifts <- seq(0, -25, by = -1)
+
+shift_results <- lapply(y_shifts, function(shift) {
+  grid_shifted <- grid %>%
+    mutate(
+      avg_points_interp = pmin(interpolate_quad(y + shift), 3.74),
+      point_diff = expected_points - avg_points_interp
+    )
+  
+  marker_val <- grid_shifted %>%
+    mutate(dist = sqrt((x - marker_x)^2 + (y - marker_y)^2)) %>%
+    slice_min(dist, n = 1) %>%
+    select(expected_points, avg_points_interp)
+  
+  tibble(
+    y_shift = shift,
+    expected_points = marker_val$expected_points,
+    avg_points_interp = marker_val$avg_points_interp
+  )
+}) %>%
+  bind_rows()
+
+shift_results_long <- shift_results %>%
+  pivot_longer(
+    cols = c(expected_points, avg_points_interp),
+    names_to = "Option",
+    values_to = "Expected_Points"
+  )
+
+delta_intercept <- ggplot(shift_results_long, aes(x = y_shift, y = Expected_Points, color = Option)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(
+    title = paste("Expected Points vs Lineout Shift at (", marker_x, ",", marker_y, ")"),
+    x = "Lineout Shift (m)",
+    y = "Expected Points",
+    color = "Option"
+  )
+
+ggsave("plots/delta_intercept_graph.png", delta_intercept, width = 12, height = 10, dpi = 300)
+
