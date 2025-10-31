@@ -579,6 +579,7 @@ sum(abs(decision_tbl$missed_points))
 
 marker_x <- -20
 marker_y <- 30
+
 y_shifts <- seq(0, -25, by = -1)
 
 shift_results <- lapply(y_shifts, function(shift) {
@@ -602,15 +603,36 @@ shift_results <- lapply(y_shifts, function(shift) {
   bind_rows()
 
 shift_results_long <- shift_results %>%
+  mutate(y_shift_plot = abs(y_shift)) %>%
   pivot_longer(
     cols = c(kick_EP, lineout_EP),
     names_to = "Option",
     values_to = "Expected_Points"
   )
 
-delta_intercept <- ggplot(shift_results_long, aes(x = y_shift, y = Expected_Points, color = Option)) +
+f <- function(shift) interpolate_quad(marker_y + shift) - shift_results$kick_EP[1]
+
+zero_shift <- -uniroot(f, c(-20, 30))$root
+
+zero_shift
+
+delta_intercept <- ggplot(shift_results_long, aes(x = y_shift_plot, y = Expected_Points, color = Option)) +
   geom_line(size = 1.2) +
   geom_point(size = 2) +
+  geom_point(
+    data = intersection,
+    aes(x = y_shift_intersect, y = Expected_Points_intersect),
+    color = "black", size = 3, shape = 21
+  ) +
+  geom_vline(xintercept = abs(zero_shift), linetype = "dashed", color = "black") +
+  annotate(
+    "text",
+    x = abs(zero_shift) + 1,  # shift label slightly right (adjust as needed)
+    y = max(shift_results_long$Expected_Points),
+    label = sprintf("Intercept = %.2f m", abs(zero_shift)),
+    vjust = -0.5,
+    hjust = 0
+  ) +
   theme_minimal() +
   labs(
     title = paste("Expected Points vs Lineout Shift at (", marker_x, ",", marker_y, ")"),
