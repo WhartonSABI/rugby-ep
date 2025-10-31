@@ -595,15 +595,15 @@ shift_results <- lapply(y_shifts, function(shift) {
   
   tibble(
     y_shift = shift,
-    expected_points = marker_val$expected_points,
-    avg_points_interp = marker_val$avg_points_interp
+    kick_EP = marker_val$expected_points,
+    lineout_EP = marker_val$avg_points_interp
   )
 }) %>%
   bind_rows()
 
 shift_results_long <- shift_results %>%
   pivot_longer(
-    cols = c(expected_points, avg_points_interp),
+    cols = c(kick_EP, lineout_EP),
     names_to = "Option",
     values_to = "Expected_Points"
   )
@@ -614,7 +614,7 @@ delta_intercept <- ggplot(shift_results_long, aes(x = y_shift, y = Expected_Poin
   theme_minimal() +
   labs(
     title = paste("Expected Points vs Lineout Shift at (", marker_x, ",", marker_y, ")"),
-    x = "Lineout Shift (m)",
+    x = "Yards Gained for Lineout (m)",
     y = "Expected Points",
     color = "Option"
   )
