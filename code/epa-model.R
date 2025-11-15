@@ -2,6 +2,8 @@
 ### REFERENCES ###
 ##################
 
+# setwd("/Users/kennywatts/Documents/GitHub/Rugby-Expected-Points/data")
+
 ## Links to Article
 # https://www.data-ruck.com/blog/predicting-kicks-outcome/
 # https://journals.sagepub.com/doi/10.1177/22150218251365220
@@ -60,6 +62,10 @@ unique(phase_data$Outcome)
 # points difference (I'm assuming for whoever has possession of the ball)
 ## oftentimes this is from perspective of the home team, but if it flips back and forth w/ possession then you're right
 unique(phase_data$Points_Difference)
+
+# phase data including cards
+
+phase_data_cards <- phase_data
 
 # remove instances when cards occur
 phase_data <- phase_data %>%
@@ -162,12 +168,7 @@ lineouts_clean <- phase_data %>%
     Location %in% zones,
     Phase == 1
   ) %>%
-  arrange(Round, Home, Away, Team_In_Poss, desc(Seconds_Remaining)) %>%
-  group_by(Round, Home, Away, Team_In_Poss, Points_Difference, Outcome) %>%
-  mutate(time_gap = lag(Seconds_Remaining) - Seconds_Remaining,
-         too_close = !is.na(time_gap) & time_gap < 200) %>%
-  slice_head(n = 1) %>%
-  ungroup()
+  arrange(Round, Home, Away, Team_In_Poss, desc(Seconds_Remaining))
 
 expected_points_by_zone <- lineouts_clean %>%
   group_by(Location) %>%
@@ -180,7 +181,130 @@ expected_points_by_zone <- lineouts_clean %>%
 
 print(expected_points_by_zone)
 
-# Expected Points of Lineout All Areas of the pitch
+#####
+# Expected points using linear regression
+#####
+
+last_play <- phase_data_cards %>%
+  group_by(Round, Home, Away) %>%
+  filter(ID == max(ID)) %>%
+  ungroup() %>%
+  mutate(
+    last_play_points = str_extract(Outcome, "[-+]?\\d+") %>% as.numeric(),
+    last_play_points = ifelse(is.na(last_play_points), 0, last_play_points),
+    
+    Score_Change = last_play_points,
+    
+    Final_Points_Difference = Points_Difference + Score_Change,
+    Final_Points_Diff_Home = if_else(Team_In_Poss == "Home",
+                                     Final_Points_Difference,
+                                     -Final_Points_Difference)
+)
+
+# making win percentage column
+
+matches <- last_play %>%
+  select(Round, Home, Away, Final_Points_Diff_Home) %>%
+  distinct()
+
+team_games <- matches %>%
+  pivot_longer(cols = c(Home, Away),
+               names_to = "Side",
+               values_to = "Team") %>%
+  mutate(
+    Win = case_when(
+      Side == "Home" & Final_Points_Diff_Home > 0 ~ 1,
+      Side == "Home" & Final_Points_Diff_Home <= 0 ~ 0,
+      Side == "Away" & Final_Points_Diff_Home < 0 ~ 1,
+      Side == "Away" & Final_Points_Diff_Home >= 0 ~ 0
+    ),
+    Round = as.numeric(Round)
+  ) %>%
+  arrange(Team, Round)
+
+team_games <- team_games %>%
+  group_by(Team) %>%
+  arrange(Round) %>%
+  mutate(
+    Games_Played = lag(row_number(), default = 0),
+    Wins_Before = lag(cumsum(Win), default = 0),
+    WinPct_Before = if_else(Games_Played == 0, 0.5, Wins_Before / Games_Played)
+  ) %>%
+  ungroup()
+
+phase_data_cards <- phase_data_cards %>%
+  mutate(
+    Team_for_join = case_when(
+      Team_In_Poss == "Home" ~ Home,
+      Team_In_Poss == "Away" ~ Away
+    )
+  )
+
+phase_data_cards <- phase_data_cards %>%
+  left_join(
+    team_games %>% select(Team, Round, WinPct_Before),
+    by = c("Team_for_join" = "Team", "Round" = "Round")
+  )
+
+regression_lineouts <- phase_data_cards %>%
+  filter(
+    Play_Start == "Lineout",
+    Location %in% zones,
+    Phase == 1
+  )
+
+regression_lineouts <- regression_lineouts %>%
+  mutate(
+    Home_Attack = if_else(Team_In_Poss == "Home", 1, 0)
+  )
+
+regression_lineouts <- regression_lineouts %>%
+  mutate(
+    Opponent = if_else(Team_In_Poss == "Home", Away, Home)
+  ) %>%
+  left_join(
+    team_games %>% select(Team, Round, WinPct_Before) %>%
+      rename(Opponent = Team,
+             Opponent_WinPct = WinPct_Before),
+    by = c("Opponent", "Round")
+  )
+
+regression_lineouts <- regression_lineouts %>%
+  mutate(
+    WinPct_Diff = WinPct_Before - Opponent_WinPct
+  )
+
+regression_lineouts <- regression_lineouts %>%
+  mutate(
+    Card_Diff = (Yellow_Cards_Opp + Red_Cards_Opp) - (Yellow_Cards_Own + Red_Cards_Own)
+  )
+
+regression_lineouts <- regression_lineouts %>%
+  mutate(
+  points = str_extract(Outcome, "[-+]?\\d+") %>% as.numeric(),
+  points = ifelse(is.na(points), 0, points))
+
+lineouts_by_zone <- split(regression_lineouts, regression_lineouts$Location)
+
+zone_regressions <- list()
+
+for (zone_name in names(lineouts_by_zone)) {
+  df <- lineouts_by_zone[[zone_name]]
+  
+  lm_zone <- lm(points ~ Seconds_Remaining + Home_Attack + WinPct_Diff + Card_Diff, data = df)
+  
+  zone_regressions[[zone_name]] <- lm_zone
+}
+
+# Expected points for each zone using regression
+
+library(broom)
+
+zone_coefficients <- lapply(names(zone_regressions), function(zone) {
+  broom::tidy(zone_regressions[[zone]]) %>%
+    mutate(Location = zone)
+}) %>%
+  bind_rows()
 
 zones_order <- c(
   "5m-Goal (opp)",
@@ -192,6 +316,30 @@ zones_order <- c(
   "5m-22m (own)",
   "Goal-5m (own)"
 )
+
+intercepts <- zone_coefficients %>%
+  filter(term == "(Intercept)")
+
+intercepts <- intercepts %>%
+  mutate(Location = factor(Location, levels = zones_order))
+
+reg_plot <- ggplot(intercepts, aes(x = Location, y = estimate)) +
+  geom_col(fill = "steelblue") +
+  geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error), width = 0.2) +
+  geom_text(aes(label = round(estimate, 2)),
+            nudge_y = 0.5,   # move labels slightly above the bars
+            hjust = -0.5) +   # center horizontally
+  labs(
+    x = "Zone",
+    y = "Intercept (Expected Points at baseline)",
+    title = "Intercept Coefficients for Each Lineout Zone"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave("plots/reg_plot.png", reg_plot, width = 10, height = 6, dpi = 300)
+
+# Expected Points of Lineout All Areas of the pitch
 
 expected_points_by_zone <- lineouts_clean %>%
   group_by(Location) %>%
