@@ -870,9 +870,9 @@ marker_value_reg
 
 # All Blacks vs South Africa Game
 
-sep_game_data = read_csv("data/All Blacks vs South Africa Game Sep 16th.csv")
+sep_game_data_csv = read_csv("data/All Blacks vs South Africa Game Sep 16th.csv")
 
-sep_game_data <- sep_game_data %>%
+sep_game_data_csv <- sep_game_data_csv %>%
   rename(
     x = `x location`,
     y = `y location`
@@ -881,7 +881,7 @@ sep_game_data <- sep_game_data %>%
     x = x - 35
   )
   
-sep_game_data <- sep_game_data %>%
+sep_game_data <- sep_game_data_csv %>%
   left_join(grid, by = c("x", "y"))
 
 sep_game_data <- sep_game_data %>%
@@ -901,8 +901,31 @@ print(decision_tbl)
 
 sum(abs(decision_tbl$missed_points))
 
+sep_game_data_reg <- sep_game_data_csv %>%
+  left_join(grid_reg, by = c("x", "y"))
+
+sep_game_data_reg <- sep_game_data_reg %>%
+  mutate(
+    optimal_decision = if_else(point_diff > 0, "lineout", "kick")
+  )
+
+decision_tbl_reg <- sep_game_data_reg %>%
+  select(Decision, optimal_decision, point_diff)
+print(decision_tbl_reg)
+
+decision_tbl_reg <- decision_tbl_reg %>%
+  mutate(
+    missed_points = if_else(Decision == optimal_decision, 0, point_diff)
+  )
+print(decision_tbl_reg)
+
+sum(abs(decision_tbl_reg$missed_points))
+
+
 # Graphing Decision Boundary
 
+
+# Not same location as SA
 marker_x <- -20
 marker_y <- 30
 
@@ -928,7 +951,35 @@ shift_results <- lapply(y_shifts, function(shift) {
 }) %>%
   bind_rows()
 
+shift_results_reg <- lapply(y_shifts, function(shift) {
+  grid_shifted_reg <- grid_reg %>%
+    mutate(
+      avg_points_interp = pmin(interpolate_quad_reg(y + shift), 3.74),
+      point_diff = expected_points - avg_points_interp
+    )
+  
+  marker_val_reg <- grid_shifted_reg %>%
+    mutate(dist = sqrt((x - marker_x)^2 + (y - marker_y)^2)) %>%
+    slice_min(dist, n = 1) %>%
+    select(expected_points, avg_points_interp)
+  
+  tibble(
+    y_shift = shift,
+    kick_EP = marker_val_reg$expected_points,
+    lineout_EP = marker_val_reg$avg_points_interp
+  )
+}) %>%
+  bind_rows()
+
 shift_results_long <- shift_results %>%
+  mutate(y_shift_plot = abs(y_shift)) %>%
+  pivot_longer(
+    cols = c(kick_EP, lineout_EP),
+    names_to = "Option",
+    values_to = "Expected_Points"
+  )
+
+shift_results_long_reg <- shift_results_reg %>%
   mutate(y_shift_plot = abs(y_shift)) %>%
   pivot_longer(
     cols = c(kick_EP, lineout_EP),
@@ -938,18 +989,20 @@ shift_results_long <- shift_results %>%
 
 f <- function(shift) interpolate_quad(marker_y + shift) - shift_results$kick_EP[1]
 
-zero_shift <- -uniroot(f, c(-20, 30))$root
+zero_shift <- -uniroot(f, c(-50, 0))$root
 
 zero_shift
+
+f_reg <- function(shift) interpolate_quad_reg(marker_y + shift) - shift_results_reg$kick_EP[1]
+
+zero_shift_reg <- -uniroot(f_reg, c(-50, 0))$root
+
+zero_shift_reg
+
 
 delta_intercept <- ggplot(shift_results_long, aes(x = y_shift_plot, y = Expected_Points, color = Option)) +
   geom_line(size = 1.2) +
   geom_point(size = 2) +
-  geom_point(
-    data = intersection,
-    aes(x = y_shift_intersect, y = Expected_Points_intersect),
-    color = "black", size = 3, shape = 21
-  ) +
   geom_vline(xintercept = abs(zero_shift), linetype = "dashed", color = "black") +
   annotate(
     "text",
@@ -968,4 +1021,26 @@ delta_intercept <- ggplot(shift_results_long, aes(x = y_shift_plot, y = Expected
   )
 
 ggsave("plots/delta_intercept_graph.png", delta_intercept, width = 12, height = 10, dpi = 300)
+
+delta_intercept_reg <- ggplot(shift_results_long_reg, aes(x = y_shift_plot, y = Expected_Points, color = Option)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  geom_vline(xintercept = abs(zero_shift_reg), linetype = "dashed", color = "black") +
+  annotate(
+    "text",
+    x = abs(zero_shift_reg) + 1,  # shift label slightly right (adjust as needed)
+    y = max(shift_results_long_reg$Expected_Points),
+    label = sprintf("Intercept = %.2f m", abs(zero_shift_reg)),
+    vjust = -0.5,
+    hjust = 0
+  ) +
+  theme_minimal() +
+  labs(
+    title = paste("Expected Points vs Lineout Shift at (", marker_x, ",", marker_y, ")"),
+    x = "Yards Gained for Lineout (m)",
+    y = "Expected Points",
+    color = "Option"
+  )
+
+ggsave("plots/delta_intercept_graph_reg.png", delta_intercept_reg, width = 12, height = 10, dpi = 300)
 
