@@ -253,6 +253,8 @@ regression_lineouts <- phase_data_cards %>%
     Phase == 1
   )
 
+# Home and away column
+
 regression_lineouts <- regression_lineouts %>%
   mutate(
     Home_Attack = if_else(Team_In_Poss == "Home", 1, 0)
@@ -269,15 +271,31 @@ regression_lineouts <- regression_lineouts %>%
     by = c("Opponent", "Round")
   )
 
+# Win percent differential
+
 regression_lineouts <- regression_lineouts %>%
   mutate(
     WinPct_Diff = WinPct_Before - Opponent_WinPct
   )
 
+# Card differential
+
 regression_lineouts <- regression_lineouts %>%
   mutate(
     Card_Diff = (Yellow_Cards_Opp + Red_Cards_Opp) - (Yellow_Cards_Own + Red_Cards_Own)
   )
+
+# Seconds remaining in half
+
+regression_lineouts <- regression_lineouts %>%
+  mutate(
+    Seconds_Remaining_Half = if_else(
+      Seconds_Remaining > 2400,             # first half
+      Seconds_Remaining - 2400,             # seconds remaining in first half
+      Seconds_Remaining                     # second half: already less than 2400
+    )
+  )
+
 
 regression_lineouts <- regression_lineouts %>%
   mutate(
@@ -291,7 +309,7 @@ zone_regressions <- list()
 for (zone_name in names(lineouts_by_zone)) {
   df <- lineouts_by_zone[[zone_name]]
   
-  lm_zone <- lm(points ~ Seconds_Remaining + Home_Attack + WinPct_Diff + Card_Diff, data = df)
+  lm_zone <- lm(points ~ Seconds_Remaining_Half + Home_Attack + WinPct_Diff + Card_Diff, data = df)
   
   zone_regressions[[zone_name]] <- lm_zone
 }
@@ -338,6 +356,48 @@ reg_plot <- ggplot(intercepts, aes(x = Location, y = estimate)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 ggsave("plots/reg_plot.png", reg_plot, width = 10, height = 6, dpi = 300)
+
+# Standard Scenario Plot
+
+Seconds_Remaining_Half_val <- 2400
+Home_Attack_val <- 1
+WinPct_Diff_val <- 0
+Card_Diff_val <- 0
+
+zone_coeff_summary <- zone_coefficients %>%
+  select(Location, term, estimate) %>%
+  pivot_wider(names_from = term, values_from = estimate, values_fn = mean)
+
+EP_standard <- zone_coeff_summary %>%
+  mutate(
+    EP_standard = `(Intercept)` +
+      Seconds_Remaining_Half * Seconds_Remaining_Half_val +
+      Home_Attack * Home_Attack_val +
+      WinPct_Diff * WinPct_Diff_val +
+      Card_Diff * Card_Diff_val
+  ) %>%
+  select(Location, EP_standard) %>%
+  pivot_longer(
+    cols = EP_standard,
+    names_to = "Condition",
+    values_to = "Expected_Points"
+  ) %>%
+  mutate(Location = factor(Location, levels = zones_order))
+
+reg_plot_standard <- ggplot(EP_standard, aes(x = Location, y = Expected_Points)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = round(Expected_Points, 2)),
+            nudge_y = 0.5, 
+            hjust = -0.5) +
+  labs(
+    x = "Zone",
+    y = "Expected Points (Standard Scenario)",
+    title = "Expected Points for Each Lineout Zone (Standard Scenario)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave("plots/standard_coef_reg_plot.png", reg_plot_standard, width = 10, height = 6, dpi = 300)
 
 # Expected Points of Lineout All Areas of the pitch
 
@@ -1047,6 +1107,12 @@ ggsave("plots/delta_intercept_graph_reg.png", delta_intercept_reg, width = 12, h
 
 # Shifting Variables in Regression Equation
 
+# Set scenario values
+
+Seconds_Remaining_Half_Coef <- 1200
+Home_Attack_Coef <- 1
+WinPct_Diff_Coef <- 0
+
 EP_given_card <- zone_coefficients %>%
   select(Location, term, estimate) %>%
   pivot_wider(
@@ -1054,11 +1120,81 @@ EP_given_card <- zone_coefficients %>%
     values_from = estimate
   ) %>%
   mutate(
-    EP_no_card = `(Intercept)`,
-    EP_card    = `(Intercept)` + Card_Diff
+    EP_no_card = `(Intercept)` +
+      Seconds_Remaining_Half * Seconds_Remaining_Half_Coef +
+      Home_Attack * Home_Attack_Coef +
+      WinPct_Diff * WinPct_Diff_Coef,
+    EP_card    = EP_no_card + Card_Diff
   )
+
 
 EP_given_card
 
+EP_long <- EP_given_card %>%
+  select(Location, EP_no_card, EP_card) %>%
+  pivot_longer(
+    cols = c(EP_no_card, EP_card),
+    names_to = "Condition",
+    values_to = "Expected_Points"
+  ) %>%
+  mutate(
+    Location = factor(Location, levels = zones_order)
+  )
 
+ggplot(EP_long, aes(x = Location, y = Expected_Points, color = Condition)) +
+  geom_point(size = 2) +
+  geom_text(aes(label = round(Expected_Points, 2)), 
+            vjust = -1, nudge_x = 0.4, size = 3, check_overlap = TRUE) +
+  labs(
+    title = "Expected Points by Zone With and Without Yellow Card",
+    x = "Zone",
+    y = "Expected Points",
+    color = "Condition"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
 
+# Changing win percentage
+
+Seconds_Remaining_Half_Coef <- 1200
+Home_Attack_Coef <- 1
+Card_Diff_val <- 0
+WinPct_Diff_vals <- c(-0.25, -0.125, 0, 0.125, 0.25)
+
+EP_scenarios <- expand.grid(
+  Location = unique(zone_coefficients$Location),
+  WinPct_Diff_val = WinPct_Diff_vals
+) %>%
+  left_join(
+    zone_coefficients %>%
+      select(Location, term, estimate) %>%
+      pivot_wider(names_from = term, values_from = estimate),
+    by = "Location"
+  ) %>%
+  mutate(
+    EP_no_card = `(Intercept)` +
+      Seconds_Remaining_Half * Seconds_Remaining_Half_Coef +
+      Home_Attack * Home_Attack_Coef +
+      WinPct_Diff * WinPct_Diff_val +
+      Card_Diff * Card_Diff_val
+  ) %>%
+  select(Location, WinPct_Diff_val, EP_no_card) %>%
+  mutate(Location = factor(Location, levels = zones_order))
+
+# Plot
+ggplot(EP_scenarios, aes(x = Location, y = EP_no_card, color = as.factor(WinPct_Diff_val), group = WinPct_Diff_val)) +
+  geom_point(size = 2) +
+  geom_line() +
+  geom_text(aes(label = round(EP_no_card, 2)), 
+            vjust = -1, size = 3, check_overlap = FALSE,
+            position = position_dodge(width = 0.5)) +
+  labs(
+    title = "Expected Points by Zone Without Yellow Card\nfor Different Win Percentage Differences",
+    x = "Zone",
+    y = "Expected Points",
+    color = "Win % Diff"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
