@@ -688,6 +688,26 @@ p6 <- ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
 
 ggsave("plots/kick_vs_lineout_comparison.png", p6, width = 12, height = 10, dpi = 300)
 
+
+p6_reg <- ggplot(grid_reg, aes(x = x, y = y, fill = point_diff)) +
+  geom_tile() +
+  scale_fill_gradient2(
+    low = "#457B9D",    # darker blue for negative
+    mid = "white",       # zero
+    high = "#E76F51",   # darker orange/red for positive
+    midpoint = 0,
+    name = "Kick vs Lineout"
+  ) +
+  coord_fixed() +
+  labs(
+    title = "Expected Points Difference (Regression): Kick vs Lineout",
+    x = "Lateral position (m)",
+    y = "Distance from goal line (m)"
+  ) +
+  theme_minimal()
+
+ggsave("plots/kick_vs_lineout_comparison_reg.png", p6_reg, width = 12, height = 10, dpi = 300)
+
 # with a y shift
 
 y_shifts <- c(0, -5, -10, -15, -20, -25)
@@ -724,6 +744,38 @@ plots <- lapply(y_shifts, function(shift) {
   p
 })
 
+plots_reg <- lapply(y_shifts, function(shift) {
+  
+  grid_shifted_reg <- grid_reg %>%
+    mutate(
+      avg_points_interp = pmin(interpolate_quad_reg(y + shift), 3.79),  # cap at 3.79
+      point_diff = expected_points - avg_points_interp
+    )
+  
+  p_reg <- ggplot(grid_shifted_reg, aes(x = x, y = y, fill = point_diff)) +
+    geom_tile() +
+    scale_fill_gradient2(
+      low = "#457B9D",    # darker blue for negative
+      mid = "white",       # zero
+      high = "#E76F51",   # darker orange/red for positive
+      midpoint = 0,
+      name = "Kick vs Lineout"
+    ) +
+    coord_fixed() +
+    labs(
+      title = paste("Expected Points Difference (Regression): Kick vs Lineout (Lineout", shift, "m)"),
+      x = "Lateral position (m)",
+      y = "Distance from goal line (m)"
+    ) +
+    theme_minimal()
+  
+  # Save each plot
+  filename <- paste0("plots/kick_vs_lineout_reg_shift_", abs(shift), "m.png")
+  ggsave(filename, p_reg, width = 12, height = 10, dpi = 300)
+  
+  p_reg
+})
+
 # Specific y shift and decision marker
 
 y_shift <- -15
@@ -734,6 +786,12 @@ marker_y <- 30
 grid_shifted <- grid %>%
   mutate(
     avg_points_interp = pmin(interpolate_quad(y + y_shift), 3.74),
+    point_diff = expected_points - avg_points_interp
+  )
+
+grid_shifted_reg <- grid %>%
+  mutate(
+    avg_points_interp = pmin(interpolate_quad_reg(y + y_shift), 3.79),
     point_diff = expected_points - avg_points_interp
   )
 
@@ -760,6 +818,29 @@ ggsave("plots/kick_vs_lineout_shift_15m_marker.png", decision_marker, width = 12
 
 decision_marker
 
+decision_marker_reg <- ggplot(grid_shifted_reg, aes(x = x, y = y, fill = point_diff)) +
+  geom_tile() +
+  scale_fill_gradient2(
+    low = "#457B9D",    # darker blue for negative
+    mid = "white",       # zero
+    high = "#E76F51",   # darker orange/red for positive
+    midpoint = 0,
+    name = "Kick vs Lineout"
+  ) +
+  coord_fixed() +
+  labs(
+    title = paste("Expected Points Difference (Regression): Kick vs Lineout (Lineout", y_shift, "m)"),
+    x = "Lateral position (m)",
+    y = "Distance from goal line (m)"
+  ) +
+  theme_minimal() +
+  # Add your marker
+  geom_point(aes(x = marker_x, y = marker_y), color = "black", size = 4, shape = 4, stroke = 1.2)
+
+ggsave("plots/kick_vs_lineout_shift_15m_marker_reg.png", decision_marker_reg, width = 12, height = 10, dpi = 300)
+
+decision_marker_reg
+
 marker_value <- grid_shifted %>%
   filter(x == marker_x, y == marker_y) %>%
   select(expected_points, avg_points_interp, point_diff)
@@ -772,6 +853,19 @@ marker_value <- marker_value %>%
   )
 
 marker_value
+
+marker_value_reg <- grid_shifted_reg %>%
+  filter(x == marker_x, y == marker_y) %>%
+  select(expected_points, avg_points_interp, point_diff)
+
+marker_value_reg <- marker_value_reg %>%
+  mutate(
+    expected_points = round(expected_points, 2),
+    avg_points_interp = round(avg_points_interp, 2),
+    point_diff = round(point_diff, 2)
+  )
+
+marker_value_reg
 
 
 # All Blacks vs South Africa Game
