@@ -1044,3 +1044,21 @@ delta_intercept_reg <- ggplot(shift_results_long_reg, aes(x = y_shift_plot, y = 
 
 ggsave("plots/delta_intercept_graph_reg.png", delta_intercept_reg, width = 12, height = 10, dpi = 300)
 
+
+# Shifting Variables in Regression Equation
+
+EP_given_card <- zone_coefficients %>%
+  select(Location, term, estimate) %>%
+  pivot_wider(
+    names_from = term,
+    values_from = estimate
+  ) %>%
+  mutate(
+    EP_no_card = `(Intercept)`,
+    EP_card    = `(Intercept)` + Card_Diff
+  )
+
+EP_given_card
+
+
+
