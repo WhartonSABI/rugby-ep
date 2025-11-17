@@ -1141,7 +1141,7 @@ EP_long <- EP_given_card %>%
     Location = factor(Location, levels = zones_order)
   )
 
-ggplot(EP_long, aes(x = Location, y = Expected_Points, color = Condition)) +
+yellow_card_plot <- ggplot(EP_long, aes(x = Location, y = Expected_Points, color = Condition)) +
   geom_point(size = 2) +
   geom_text(aes(label = round(Expected_Points, 2)), 
             vjust = -1, nudge_x = 0.4, size = 3, check_overlap = TRUE) +
@@ -1155,6 +1155,9 @@ ggplot(EP_long, aes(x = Location, y = Expected_Points, color = Condition)) +
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1)
   )
+
+ggsave("plots/yellow_card_plot.png", yellow_card_plot, width = 12, height = 10, dpi = 300)
+
 
 # Changing win percentage
 
@@ -1183,8 +1186,7 @@ EP_scenarios <- expand.grid(
   select(Location, WinPct_Diff_val, EP_no_card) %>%
   mutate(Location = factor(Location, levels = zones_order))
 
-# Plot
-ggplot(EP_scenarios, aes(x = Location, y = EP_no_card, color = as.factor(WinPct_Diff_val), group = WinPct_Diff_val)) +
+win_percent_plot <- ggplot(EP_scenarios, aes(x = Location, y = EP_no_card, color = as.factor(WinPct_Diff_val), group = WinPct_Diff_val)) +
   geom_point(size = 2) +
   geom_line() +
   geom_text(aes(label = round(EP_no_card, 2)), 
@@ -1198,3 +1200,63 @@ ggplot(EP_scenarios, aes(x = Location, y = EP_no_card, color = as.factor(WinPct_
   ) +
   theme_minimal(base_size = 12) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave("plots/win_percent_plot.png", win_percent_plot, width = 12, height = 10, dpi = 300)
+
+# Standard Scenario
+
+
+# Scenario values
+Seconds_Remaining_Half_val <- 1200
+Home_Attack_val <- 1
+WinPct_Diff_val <- 0
+Card_Diff_val <- 0
+
+# Reshape to wide so each term and its std.error is a column
+EP_standard <- zone_coefficients %>%
+  pivot_wider(
+    id_cols = Location,
+    names_from = term,
+    values_from = c(estimate, std.error),
+    names_glue = "{term}_{.value}"
+  ) %>%
+  mutate(
+    EP_standard = `(Intercept)_estimate` +
+      Seconds_Remaining_Half_estimate * Seconds_Remaining_Half_val +
+      Home_Attack_estimate * Home_Attack_val +
+      WinPct_Diff_estimate * WinPct_Diff_val +
+      Card_Diff_estimate * Card_Diff_val,
+    SE_EP_standard = sqrt(
+      `(Intercept)_std.error`^2 +
+        (Seconds_Remaining_Half_val^2) * (Seconds_Remaining_Half_std.error^2) +
+        (Home_Attack_val^2) * (Home_Attack_std.error^2) +
+        (WinPct_Diff_val^2) * (WinPct_Diff_std.error^2) +
+        (Card_Diff_val^2) * (Card_Diff_std.error^2)
+    )
+  ) %>%
+  mutate(Location = factor(Location, levels = zones_order))
+
+zones_to_plot <- zones_order[1:6]
+
+EP_standard_subset <- EP_standard %>%
+  filter(Location %in% zones_to_plot) %>%
+  mutate(Location = factor(Location, levels = zones_to_plot))
+
+reg_plot_standard <- ggplot(EP_standard_subset, aes(x = Location, y = EP_standard)) +
+  geom_col(fill = "steelblue") +
+  geom_errorbar(aes(ymin = EP_standard - SE_EP_standard, 
+                    ymax = EP_standard + SE_EP_standard),
+                width = 0.2) +
+  geom_text(aes(label = round(EP_standard, 2)),
+            nudge_y = 0.5, 
+            hjust = -0.5) +
+  labs(
+    x = "Zone",
+    y = "Expected Points (Standard Scenario)",
+    title = "Expected Points for Each Lineout Zone (Standard Scenario)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave("plots/reg_plot_standard.png", reg_plot_standard, width = 12, height = 10, dpi = 300)
+
