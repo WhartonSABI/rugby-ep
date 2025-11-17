@@ -2,7 +2,7 @@
 ### REFERENCES ###
 ##################
 
-# setwd("/Users/kennywatts/Documents/GitHub/Rugby-Expected-Points/data")
+# setwd("/Users/kennywatts/Documents/GitHub/Rugby-Expected-Points/")
 
 ## Links to Article
 # https://www.data-ruck.com/blog/predicting-kicks-outcome/
@@ -352,6 +352,10 @@ expected_points_by_zone <- lineouts_clean %>%
   mutate(Location = factor(Location, levels = zones_order)) %>%
   arrange(Location)
 
+expected_points_regression <- intercepts %>%
+  mutate(Location = factor(Location, levels = zones_order)) %>%
+  arrange(Location)
+
 # Print Table
 print(expected_points_by_zone)
 
@@ -365,15 +369,23 @@ zone_meters <- c(2.5, 13.5, 31, 45, 55, 69, 86.5, 97.5)
 expected_points_by_zone$Location <- factor(expected_points_by_zone$Location, levels = zones_order)
 expected_points_by_zone$meter_x <- zone_meters[match(as.character(expected_points_by_zone$Location), zones_order)]
 
+expected_points_regression$Location <- factor(expected_points_regression$Location, levels = zones_order)
+expected_points_regression$meter_x <- zone_meters[match(as.character(expected_points_regression$Location), zones_order)]
+
 # Computing Quadratic Minimum
 
 quad_fit_tmp <- lm(avg_points ~ poly(meter_x, 2), data = expected_points_by_zone)
+quad_fit_reg <- lm(estimate ~ poly(meter_x, 2), data = expected_points_regression)
+
 grid_x <- seq(min(expected_points_by_zone$meter_x, na.rm = TRUE),
               max(expected_points_by_zone$meter_x, na.rm = TRUE),
               length.out = 2000)
+
 pred_tmp <- predict(quad_fit_tmp, newdata = data.frame(meter_x = grid_x))
+pred_reg <- predict(quad_fit_reg, newdata = data.frame(meter_x = grid_x))
 
 cap_x <- grid_x[which.min(pred_tmp)]
+cap_x_reg <- grid_x[which.min(pred_reg)]
 
 lineout_plot <- ggplot(expected_points_by_zone, aes(x = meter_x, y = avg_points)) +
   geom_point(size = 2) +
@@ -414,6 +426,48 @@ p2 <- ggplot(df, aes(x = y_mid, y = avg_points)) +
   theme_minimal()
 
 ggsave("plots/expected_points_by_zone.png", p2, width = 10, height = 6, dpi = 300)
+
+# Regression quad plot
+
+lineout_plot_reg <- ggplot(expected_points_regression, aes(x = meter_x, y = estimate)) +
+  geom_point(size = 2) +
+  geom_text(aes(label = round(estimate, 2)), vjust = -1.2, size = 3, check_overlap = TRUE) +
+  geom_smooth(method = "lm", formula = y ~ poly(pmin(x,  cap_x_reg), 3), se = FALSE, linewidth = 0.8) +
+  scale_x_continuous(
+    breaks = field_lines,
+    labels = line_names,
+    expand = expansion(add = c(3, 3)),
+    limits = c(0, 100)  # ensures full field range
+  ) +
+  labs(
+    title = "Average Points by Lineout Location (Cubic Fit, Increasing Distance from Opposition Goal Line)",
+    x = "Field Position (meters)",
+    y = "Average Expected Points"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title.x = element_text(margin = ggplot2::margin(t = unit(8, "pt")))
+  )
+
+ggsave("plots/lineout_plot_reg.png", lineout_plot, width = 10, height = 6, dpi = 300)
+
+df_reg <- tibble::tibble(
+  y_mid = c(31, 13.5, 2.5, 45),
+  estimate = c(1.25, 2.04, 3.74, 0.879)
+)
+
+p2_reg <- ggplot(df_reg, aes(x = y_mid, y = estimate)) +
+  geom_point(size = 3, color = "red") +
+  geom_line(group = 1, color = "blue") +
+  labs(
+    title = "Average Expected Points by Zone",
+    x = "Distance from goal line (m, zone midpoint)",
+    y = "Average Points"
+  ) +
+  theme_minimal()
+
+ggsave("plots/expected_points_regression.png", p2_reg, width = 10, height = 6, dpi = 300)
 
 # coefficients from logistic regression (REPLICATE THIS)
 beta_angle <- 0.45
@@ -459,7 +513,7 @@ grid <- grid %>%
   ) %>%
   mutate(
     prob = prob_raw_max / max(prob_raw_max),
-    expected_points = prob * 3 + (1-prob)*0.604    # 6.04 obtained from expected points following a 22 meter drop out
+    expected_points = prob * 3 + (1-prob)*0.604    # 0.604 obtained from expected points following a 22 meter drop out
   )
 
 
@@ -556,13 +610,23 @@ expected_points_by_zone <- tibble(
   avg_points = c(1.25, 2.04, 3.74, 0.879)
 )
 
+expected_points_by_zone_reg <- tibble(
+  Location = c("10m-22m (opp)", "22m-5m (opp)", "5m-Goal (opp)", "Half-10m (opp)"),
+  y_mid = c(31, 13.5, 2.5, 45),
+  avg_points = c(0.77, 1.02, 3.79, 1.01)
+)
+
 # fit quadratic function
 quad_fit <- lm(avg_points ~ poly(y_mid, 2, raw = TRUE), data = expected_points_by_zone)
+quad_fit_reg <- lm(avg_points ~ poly(y_mid, 2, raw = TRUE), data = expected_points_by_zone_reg)
 
 y_dense <- seq(min(expected_points_by_zone$y_mid),
                max(expected_points_by_zone$y_mid), length.out = 500)
+y_dense_reg <- seq(min(expected_points_by_zone_reg$y_mid),
+               max(expected_points_by_zone_reg$y_mid), length.out = 500)
 
 fitted_dense <- predict(quad_fit, newdata = data.frame(y_mid = y_dense))
+fitted_dense_reg <- predict(quad_fit_reg, newdata = data.frame(y_mid = y_dense_reg))
 
 p5 <- ggplot() +
   geom_point(data = expected_points_by_zone, aes(x = y_mid, y = avg_points), color = "blue") +
@@ -574,13 +638,33 @@ p5 <- ggplot() +
 
 ggsave("plots/quadratic_fit.png", p5, width = 10, height = 6, dpi = 300)
 
+p5_reg <- ggplot() +
+  geom_point(data = expected_points_by_zone_reg, aes(x = y_mid, y = avg_points), color = "blue") +
+  geom_line(aes(x = y_dense_reg, y = fitted_dense_reg), color = "red", linewidth = 1) +
+  labs(title = "Quadratic Fit to Average Points by Zone",
+       x = "y_mid",
+       y = "Average Points") +
+  theme_minimal()
+
+ggsave("plots/quadratic_fit_reg.png", p5, width = 10, height = 6, dpi = 300)
+
 interpolate_quad <- function(x) {
   predict(quad_fit, newdata = data.frame(y_mid = x))
+}
+
+interpolate_quad_reg <- function(x) {
+  predict(quad_fit_reg, newdata = data.frame(y_mid = x))
 }
 
 grid <- grid %>%
   mutate(
     avg_points_interp = interpolate_quad(y),
+    point_diff = expected_points - avg_points_interp
+  )
+
+grid_reg <- grid %>%
+  mutate(
+    avg_points_interp = interpolate_quad_reg(y),
     point_diff = expected_points - avg_points_interp
   )
 
