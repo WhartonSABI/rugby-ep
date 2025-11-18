@@ -1,14 +1,14 @@
-﻿Time,x location,y location,Decision,Team,Lineout y
-4440,16,45,kick,AB,
-4330,60,37,lineout,AB,15
-4130,24,49,lineout,SA,20
-3510,15,30,kick,SA,
-3360,61,43,kick,SA,
-2670,15,50,lineout,SA,17
-1810,21,29,kick,AB,
-1220,16,40,lineout,SA,20
-990,10,22,lineout,AB,5
-900,12,5,lineout,AB,5
-520,15,31,lineout,SA,15
-200,56,56,lineout,SA,27
-120,35,26,lineout,SA,13
+﻿Time,x location,y location,Decision,Team,Lineout y,Less_Than_2_Min_val,Home_Attack_val,WinPct_Diff_val,Card_Diff_val,distance_from_try_after_shift,Location
+4440,16,45,kick,AB,,0,1,0,0,25,10m-22m (opp)
+4330,60,37,lineout,AB,15,0,1,0,0,17,22m-5m (opp)
+4130,24,49,lineout,SA,20,0,0,0,0,29,10m-22m (opp)
+3510,15,30,kick,SA,,0,0,0,0,10,22m-5m (opp)
+3360,61,43,kick,SA,,0,0,0,0,23,10m-22m (opp)
+2670,15,50,lineout,SA,17,1,0,0,0,30,10m-22m (opp)
+1810,21,29,kick,AB,,0,1,0,0,9,22m-5m (opp)
+1220,16,40,lineout,SA,20,0,0,0,0,20,22m-5m (opp)
+990,10,22,lineout,AB,5,0,1,0,0,5,5m-Goal (opp)
+900,12,5,lineout,AB,5,0,1,0,1,5,5m-Goal (opp)
+520,15,31,lineout,SA,15,0,0,0,-1,11,22m-5m (opp)
+200,56,56,lineout,SA,27,1,0,0,0,36,10m-22m (opp)
+120,35,26,lineout,SA,13,1,0,0,0,6,22m-5m (opp)

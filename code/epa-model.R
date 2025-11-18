@@ -296,6 +296,10 @@ regression_lineouts <- regression_lineouts %>%
     )
   )
 
+regression_lineouts <- regression_lineouts %>%
+  mutate(
+    Less_Than_2_Min = if_else(Seconds_Remaining_Half < 120, 1, 0)
+  )
 
 regression_lineouts <- regression_lineouts %>%
   mutate(
@@ -321,7 +325,7 @@ zone_regressions <- list()
 for (zone_name in names(lineouts_by_zone)) {
   df <- lineouts_by_zone[[zone_name]]
   
-  lm_zone <- lm(weighted_points ~ Seconds_Remaining_Half + Home_Attack + WinPct_Diff + Card_Diff, data = df)
+  lm_zone <- lm(weighted_points ~ Less_Than_2_Min + Home_Attack + WinPct_Diff + Card_Diff, data = df)
   
   zone_regressions[[zone_name]] <- lm_zone
 }
@@ -371,7 +375,7 @@ ggsave("plots/reg_plot.png", reg_plot, width = 10, height = 6, dpi = 300)
 
 # Standard Scenario Plot
 
-Seconds_Remaining_Half_val <- 1200
+Less_Than_2_Min_val <- 0
 Home_Attack_val <- 1
 WinPct_Diff_val <- 0
 Card_Diff_val <- 0
@@ -383,7 +387,7 @@ zone_coeff_summary <- zone_coefficients %>%
 EP_standard <- zone_coeff_summary %>%
   mutate(
     EP_standard = `(Intercept)` +
-      Seconds_Remaining_Half * Seconds_Remaining_Half_val +
+      Less_Than_2_Min * Less_Than_2_Min_val +
       Home_Attack * Home_Attack_val +
       WinPct_Diff * WinPct_Diff_val +
       Card_Diff * Card_Diff_val
@@ -837,10 +841,10 @@ plots_reg <- lapply(y_shifts, function(shift) {
 
 # Specific y shift and decision marker
 
-y_shift <- -15
+y_shift <- -20
 
-marker_x <- 20
-marker_y <- 30
+marker_x <- 19
+marker_y <- 40
 
 grid_shifted <- grid %>%
   mutate(
@@ -929,8 +933,8 @@ marker_value_reg
 
 # Graphing Decision Boundary
 
-marker_x <- -20
-marker_y <- 30
+marker_x <- 19
+marker_y <- 40
 
 y_shifts <- seq(0, -35, by = -1)
 
@@ -1053,7 +1057,7 @@ ggsave("plots/delta_intercept_graph_reg.png", delta_intercept_reg, width = 12, h
 
 # Set scenario values
 
-Seconds_Remaining_Half_Coef <- 1200
+Less_Than_2_Min_Coef <- 0
 Home_Attack_Coef <- 1
 WinPct_Diff_Coef <- 0
 
@@ -1065,7 +1069,7 @@ EP_given_card <- zone_coefficients %>%
   ) %>%
   mutate(
     EP_no_card = `(Intercept)` +
-      Seconds_Remaining_Half * Seconds_Remaining_Half_Coef +
+      Less_Than_2_Min * Less_Than_2_Min_Coef +
       Home_Attack * Home_Attack_Coef +
       WinPct_Diff * WinPct_Diff_Coef,
     EP_card    = EP_no_card + Card_Diff
@@ -1104,7 +1108,7 @@ ggsave("plots/yellow_card_plot.png", yellow_card_plot, width = 12, height = 10, 
 
 # Changing win percentage
 
-Seconds_Remaining_Half_Coef <- 1200
+Less_Than_2_Min_Coef <- 0
 Home_Attack_Coef <- 1
 Card_Diff_val <- 0
 WinPct_Diff_vals <- c(-0.25, -0.125, 0, 0.125, 0.25)
@@ -1121,7 +1125,7 @@ EP_scenarios <- expand.grid(
   ) %>%
   mutate(
     EP_no_card = `(Intercept)` +
-      Seconds_Remaining_Half * Seconds_Remaining_Half_Coef +
+      Less_Than_2_Min * Less_Than_2_Min_Coef +
       Home_Attack * Home_Attack_Coef +
       WinPct_Diff * WinPct_Diff_val +
       Card_Diff * Card_Diff_val
@@ -1150,7 +1154,7 @@ ggsave("plots/win_percent_plot.png", win_percent_plot, width = 12, height = 10, 
 
 
 # Scenario values
-Seconds_Remaining_Half_val <- 1200
+Less_Than_2_Min_val <- 0
 Home_Attack_val <- 1
 WinPct_Diff_val <- 0
 Card_Diff_val <- 0
@@ -1165,13 +1169,13 @@ EP_standard <- zone_coefficients %>%
   ) %>%
   mutate(
     EP_standard = `(Intercept)_estimate` +
-      Seconds_Remaining_Half_estimate * Seconds_Remaining_Half_val +
+      Less_Than_2_Min_estimate * Less_Than_2_Min_val +
       Home_Attack_estimate * Home_Attack_val +
       WinPct_Diff_estimate * WinPct_Diff_val +
       Card_Diff_estimate * Card_Diff_val,
     SE_EP_standard = sqrt(
       `(Intercept)_std.error`^2 +
-        (Seconds_Remaining_Half_val^2) * (Seconds_Remaining_Half_std.error^2) +
+        (Less_Than_2_Min_val^2) * (Less_Than_2_Min_std.error^2) +
         (Home_Attack_val^2) * (Home_Attack_std.error^2) +
         (WinPct_Diff_val^2) * (WinPct_Diff_std.error^2) +
         (Card_Diff_val^2) * (Card_Diff_std.error^2)
@@ -1204,7 +1208,7 @@ reg_plot_standard <- ggplot(EP_standard_subset, aes(x = Location, y = EP_standar
 ggsave("plots/reg_plot_standard.png", reg_plot_standard, width = 12, height = 10, dpi = 300)
 
 
-# All Blacks vs South Africa Game
+# All Blacks vs South Africa Game #This is wrong
 
 sep_game_data_csv = read_csv("data/All Blacks vs South Africa Game Sep 16th.csv")
 
@@ -1218,44 +1222,154 @@ sep_game_data_csv <- sep_game_data_csv %>%
     y = y
   )
 
-# Example #4 Values
-
-
-x_value <- 20
-y_value <- 30
-Seconds_Remaining_Half_val <- 1110
-Home_Attack_val <- 0
-WinPct_Diff_val <- 0
-Card_Diff_val <- 0
-distance_from_try <- data.frame(zone_meters = 30)
-
-intercepts <- intercepts %>%
-  mutate(Location = factor(Location, levels = zones_order)) %>%
-  arrange(Location) %>%
-  mutate(zone_meters = zone_meters)
-
 intercept_fit <- lm(estimate ~ poly(zone_meters, 2), data = intercepts)
 
-predicted_intercept <- predict(intercept_fit, newdata = distance_from_try)
+sep_game_data_csv <- sep_game_data_csv %>%
+  mutate(
+    predicted_intercept = predict(intercept_fit,
+                                  newdata = data.frame(
+                                    zone_meters = distance_from_try_after_shift
+                                  ))
+  )
 
-coeffs_zone <- zone_coefficients %>%
-  filter(Location == "10m-22m (opp)") %>%
-  select(term, estimate) %>%
-  pivot_wider(names_from = term, values_from = estimate)
+coeffs_zone_wide <- zone_coefficients %>%
+  select(term, estimate, Location) %>%
+  pivot_wider(
+    names_from = term,
+    values_from = estimate
+  )
 
-coeffs_zone <- coeffs_zone %>%
-  mutate(`(Intercept)` = predicted_intercept)
+match_with_coeffs <- sep_game_data_csv %>%
+  left_join(coeffs_zone_wide, by = "Location")
 
-EP_lineout <- coeffs_zone$`(Intercept)` +
-  coeffs_zone$Seconds_Remaining_Half * Seconds_Remaining_Half_val +
-  coeffs_zone$Home_Attack * Home_Attack_val +
-  coeffs_zone$WinPct_Diff * WinPct_Diff_val +
-  coeffs_zone$Card_Diff * Card_Diff_val
+match_with_coeffs <- match_with_coeffs %>%
+  mutate(
+    EP_lineout =
+      predicted_intercept +
+      Less_Than_2_Min * Less_Than_2_Min_val +
+      Home_Attack * Home_Attack_val +
+      WinPct_Diff * WinPct_Diff_val +
+      Card_Diff * Card_Diff_val
+  )
 
-EP_lineout
+match_with_coeffs <- match_with_coeffs %>%
+  left_join(
+    grid %>% select(x, y, expected_points),
+    by = c("x", "y")
+  ) %>%
+  rename(EP_kick = expected_points)
 
-EP_Kick <- grid %>%
-  filter(x == x_value, y == y_value) %>%
-  pull(expected_points)
+# Comparing optimal to actual decisions
 
-EP_Kick
+match_with_coeffs <- match_with_coeffs %>%
+  mutate(
+    optimal_decision = if_else(EP_kick >= EP_lineout, "kick", "lineout"),
+    
+    EP_optimal = pmax(EP_kick, EP_lineout),
+    
+    EP_actual = if_else(Decision == "kick", EP_kick, EP_lineout),
+    
+    EP_lost = EP_optimal - EP_actual
+  )
+
+decision_table <- match_with_coeffs %>%
+  select(Team, Decision, optimal_decision, EP_actual, EP_optimal, EP_lost)
+
+decision_table
+
+team_EP_lost <- match_with_coeffs %>%
+  group_by(Team) %>%
+  summarise(
+    total_EP_lost = sum(EP_lost, na.rm = TRUE)
+  )
+
+team_EP_lost
+
+# Final score ABs won 24-17
+
+
+# Scenario Plot
+
+Less_Than_2_Min_val <- 0
+Home_Attack_val <- 1
+WinPct_Diff_val <- 0
+Card_Diff_val <- -1
+shift <- -20
+
+zone_coeff_summary <- zone_coefficients %>%
+  select(Location, term, estimate) %>%
+  pivot_wider(names_from = term, values_from = estimate, values_fn = mean)
+
+EP_scenario <- zone_coeff_summary %>%
+  mutate(
+    EP_scenario = `(Intercept)` +
+      Less_Than_2_Min * Less_Than_2_Min_val +
+      Home_Attack * Home_Attack_val +
+      WinPct_Diff * WinPct_Diff_val +
+      Card_Diff * Card_Diff_val
+  ) %>%
+  select(Location, EP_scenario) %>%
+  pivot_longer(
+    cols = EP_scenario,
+    names_to = "Condition",
+    values_to = "Expected_Points"
+  ) %>%
+  mutate(Location = factor(Location, levels = zones_order))
+
+expected_points_regression_scenario <- EP_scenario %>%
+  arrange(factor(Location, levels = zones_order)) %>%
+  select(Location, Expected_Points) %>%
+  mutate(Location = factor(Location, levels = zones_order))
+
+expected_points_regression_scenario$Location <- factor(expected_points_regression_scenario$Location, levels = zones_order)
+expected_points_regression_scenario$meter_x <- zone_meters[match(as.character(expected_points_regression_scenario$Location), zones_order)]
+
+quad_fit_reg_scenario <- lm(Expected_Points ~ poly(meter_x, 2), data = expected_points_regression_scenario)
+
+grid_x <- seq(min(expected_points_by_zone$meter_x, na.rm = TRUE),
+              max(expected_points_by_zone$meter_x, na.rm = TRUE),
+              length.out = 2000)
+
+y_dense_reg_scenario <- seq(min(expected_points_regression_scenario$meter_x),
+                   max(expected_points_regression_scenario$meter_x), length.out = 500)
+
+interpolate_quad_reg_scenario <- function(x) {
+  predict(quad_fit_reg_scenario, newdata = data.frame(meter_x = x))
+}
+
+grid_reg <- grid %>%
+  mutate(
+    avg_points_interp = interpolate_quad_reg_scenario(y),
+    point_diff = expected_points - avg_points_interp
+  )
+
+grid_shifted_reg <- grid_reg %>%
+  mutate(
+    avg_points_interp = pmin(interpolate_quad_reg_scenario(y + shift), 4.96),
+    point_diff = expected_points - avg_points_interp
+  )
+
+x_marker <- 19
+y_marker <- 40
+
+scenario <- ggplot(grid_shifted_reg, aes(x = x, y = y, fill = point_diff)) +
+  geom_tile() +
+  scale_fill_gradient2(
+    low = "#457B9D",
+    mid = "white",
+    high = "#E76F51",
+    midpoint = 0,
+    name = "Kick vs Lineout"
+  ) +
+  #geom_text(aes(x = x_marker, y = y_marker), label = "X", 
+            #size = 5, fontface = "bold", color = "black") +
+  coord_fixed() +
+  labs(
+    title = paste("Expected Points Difference: Kick vs Lineout (Lineout", shift, "m, home, -1 card)"),
+    x = "Lateral position (m)",
+    y = "Distance from goal line (m)"
+  ) +
+  theme_minimal()
+
+ggsave("plots/20m_home_-1card.png", scenario, width = 12, height = 10, dpi = 300)
+
