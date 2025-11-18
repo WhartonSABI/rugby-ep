@@ -302,6 +302,18 @@ regression_lineouts <- regression_lineouts %>%
   points = str_extract(Outcome, "[-+]?\\d+") %>% as.numeric(),
   points = ifelse(is.na(points), 0, points))
 
+# Weighting lineouts in consecutive possessions with same outcome
+
+regression_lineouts <- regression_lineouts %>%
+  arrange(Round, Home, Away, ID) %>%
+  group_by(Round, Home, Away) %>%
+  mutate(
+    run_id = cumsum(c(TRUE, diff(Points_Difference) != 0 | Outcome[-1] != Outcome[-n()])),
+    n_same = ave(run_id, run_id, FUN = length),          # count observations in each run
+    weighted_points = points / n_same                   # divide points by number in run
+  ) %>%
+  ungroup()
+
 lineouts_by_zone <- split(regression_lineouts, regression_lineouts$Location)
 
 zone_regressions <- list()
@@ -309,7 +321,7 @@ zone_regressions <- list()
 for (zone_name in names(lineouts_by_zone)) {
   df <- lineouts_by_zone[[zone_name]]
   
-  lm_zone <- lm(points ~ Seconds_Remaining_Half + Home_Attack + WinPct_Diff + Card_Diff, data = df)
+  lm_zone <- lm(weighted_points ~ Seconds_Remaining_Half + Home_Attack + WinPct_Diff + Card_Diff, data = df)
   
   zone_regressions[[zone_name]] <- lm_zone
 }
@@ -359,7 +371,7 @@ ggsave("plots/reg_plot.png", reg_plot, width = 10, height = 6, dpi = 300)
 
 # Standard Scenario Plot
 
-Seconds_Remaining_Half_val <- 2400
+Seconds_Remaining_Half_val <- 1200
 Home_Attack_val <- 1
 WinPct_Diff_val <- 0
 Card_Diff_val <- 0
@@ -401,20 +413,21 @@ ggsave("plots/standard_coef_reg_plot.png", reg_plot_standard, width = 10, height
 
 # Expected Points of Lineout All Areas of the pitch
 
-expected_points_by_zone <- lineouts_clean %>%
+expected_points_by_zone <- lineouts_weighted %>%
   group_by(Location) %>%
   summarise(
     n_phases = n(),
-    avg_points = mean(points, na.rm = TRUE),
-    total_points = sum(points, na.rm = TRUE),
+    avg_points = mean(weighted_points, na.rm = TRUE),
+    total_points = sum(weighted_points, na.rm = TRUE),
     .groups = "drop"
   ) %>%
   mutate(Location = factor(Location, levels = zones_order)) %>%
   arrange(Location)
 
-expected_points_regression <- intercepts %>%
-  mutate(Location = factor(Location, levels = zones_order)) %>%
-  arrange(Location)
+expected_points_regression <- EP_standard %>%
+  arrange(factor(Location, levels = zones_order)) %>%
+  select(Location, Expected_Points) %>%
+  mutate(Location = factor(Location, levels = zones_order))
 
 # Print Table
 print(expected_points_by_zone)
@@ -435,7 +448,8 @@ expected_points_regression$meter_x <- zone_meters[match(as.character(expected_po
 # Computing Quadratic Minimum
 
 quad_fit_tmp <- lm(avg_points ~ poly(meter_x, 2), data = expected_points_by_zone)
-quad_fit_reg <- lm(estimate ~ poly(meter_x, 2), data = expected_points_regression)
+quad_fit_reg <- lm(Expected_Points ~ poly(meter_x, 2), data = expected_points_regression)
+
 
 grid_x <- seq(min(expected_points_by_zone$meter_x, na.rm = TRUE),
               max(expected_points_by_zone$meter_x, na.rm = TRUE),
@@ -472,7 +486,7 @@ ggsave("plots/lineout_plot.png", lineout_plot, width = 10, height = 6, dpi = 300
 
 df <- tibble::tibble(
   y_mid = c(31, 13.5, 2.5, 45),
-  avg_points = c(1.25, 2.04, 3.74, 0.879)
+  avg_points = c(1.36, 2.4, 4.17, 0.66)
 )
 
 p2 <- ggplot(df, aes(x = y_mid, y = avg_points)) +
@@ -489,10 +503,10 @@ ggsave("plots/expected_points_by_zone.png", p2, width = 10, height = 6, dpi = 30
 
 # Regression quad plot
 
-lineout_plot_reg <- ggplot(expected_points_regression, aes(x = meter_x, y = estimate)) +
+lineout_plot_reg <- ggplot(expected_points_regression, aes(x = meter_x, y = Expected_Points)) +
   geom_point(size = 2) +
-  geom_text(aes(label = round(estimate, 2)), vjust = -1.2, size = 3, check_overlap = TRUE) +
-  geom_smooth(method = "lm", formula = y ~ poly(pmin(x,  cap_x_reg), 3), se = FALSE, linewidth = 0.8) +
+  geom_text(aes(label = round(Expected_Points, 2)), vjust = -1.2, size = 3, check_overlap = TRUE) +
+  geom_smooth(method = "lm", formula = y ~ poly(pmin(x,  cap_x_reg), 2), se = FALSE, linewidth = 0.8) +
   scale_x_continuous(
     breaks = field_lines,
     labels = line_names,
@@ -500,7 +514,7 @@ lineout_plot_reg <- ggplot(expected_points_regression, aes(x = meter_x, y = esti
     limits = c(0, 100)  # ensures full field range
   ) +
   labs(
-    title = "Average Points by Lineout Location (Cubic Fit, Increasing Distance from Opposition Goal Line)",
+    title = "Average Points by Lineout Location",
     x = "Field Position (meters)",
     y = "Average Expected Points"
   ) +
@@ -510,11 +524,11 @@ lineout_plot_reg <- ggplot(expected_points_regression, aes(x = meter_x, y = esti
     axis.title.x = element_text(margin = ggplot2::margin(t = unit(8, "pt")))
   )
 
-ggsave("plots/lineout_plot_reg.png", lineout_plot, width = 10, height = 6, dpi = 300)
+ggsave("plots/lineout_plot_reg.png", lineout_plot_reg, width = 10, height = 6, dpi = 300)
 
 df_reg <- tibble::tibble(
   y_mid = c(31, 13.5, 2.5, 45),
-  estimate = c(1.25, 2.04, 3.74, 0.879)
+  estimate = c(1.36, 2.4, 4.17, 0.66)
 )
 
 p2_reg <- ggplot(df_reg, aes(x = y_mid, y = estimate)) +
@@ -573,7 +587,7 @@ grid <- grid %>%
   ) %>%
   mutate(
     prob = prob_raw_max / max(prob_raw_max),
-    expected_points = prob * 3 + (1-prob)*0.604    # 0.604 obtained from expected points following a 22 meter drop out
+    expected_points = prob * 3 + (1-prob)*0.74    # 0.74 obtained from expected points following a 22 meter drop out
   )
 
 
@@ -654,66 +668,51 @@ avg_points_by_location_restarts <- restarts_not_after_score %>%
   ) %>%
   arrange(desc(avg_expected_points))
 
+avg_points_by_location_restarts <- avg_points_by_location_restarts %>% 
+  dplyr::slice(1:5)
+
 print(avg_points_by_location_restarts)
 
-overall_avg_points_restarts <- restarts_not_after_score %>%
-  summarise(overall_avg_expected_points = mean(points, na.rm = TRUE))
-
-print(overall_avg_points_restarts)
-
-
-# lineout expected points
-
-expected_points_by_zone <- tibble(
-  Location = c("10m-22m (opp)", "22m-5m (opp)", "5m-Goal (opp)", "Half-10m (opp)"),
-  y_mid = c(31, 13.5, 2.5, 45),
-  avg_points = c(1.25, 2.04, 3.74, 0.879)
+overall_avg_points_restarts <- weighted.mean(
+  avg_points_by_location_restarts$avg_expected_points,
+  avg_points_by_location_restarts$n
 )
 
-expected_points_by_zone_reg <- tibble(
-  Location = c("10m-22m (opp)", "22m-5m (opp)", "5m-Goal (opp)", "Half-10m (opp)"),
-  y_mid = c(31, 13.5, 2.5, 45),
-  avg_points = c(0.77, 1.02, 3.79, 1.01)
-)
 
-# fit quadratic function
-quad_fit <- lm(avg_points ~ poly(y_mid, 2, raw = TRUE), data = expected_points_by_zone)
-quad_fit_reg <- lm(avg_points ~ poly(y_mid, 2, raw = TRUE), data = expected_points_by_zone_reg)
+y_dense <- seq(min(expected_points_by_zone$meter_x),
+               max(expected_points_by_zone$meter_x), length.out = 500)
+y_dense_reg <- seq(min(expected_points_regression$meter_x),
+               max(expected_points_regression$meter_x), length.out = 500)
 
-y_dense <- seq(min(expected_points_by_zone$y_mid),
-               max(expected_points_by_zone$y_mid), length.out = 500)
-y_dense_reg <- seq(min(expected_points_by_zone_reg$y_mid),
-               max(expected_points_by_zone_reg$y_mid), length.out = 500)
-
-fitted_dense <- predict(quad_fit, newdata = data.frame(y_mid = y_dense))
-fitted_dense_reg <- predict(quad_fit_reg, newdata = data.frame(y_mid = y_dense_reg))
+fitted_dense <- predict(quad_fit_tmp, newdata = data.frame(meter_x = y_dense))
+fitted_dense_reg <- predict(quad_fit_reg, newdata = data.frame(meter_x = y_dense_reg))
 
 p5 <- ggplot() +
-  geom_point(data = expected_points_by_zone, aes(x = y_mid, y = avg_points), color = "blue") +
+  geom_point(data = expected_points_by_zone, aes(x = meter_x, y = avg_points), color = "blue") +
   geom_line(aes(x = y_dense, y = fitted_dense), color = "red", linewidth = 1) +
   labs(title = "Quadratic Fit to Average Points by Zone",
-       x = "y_mid",
+       x = "meter_x",
        y = "Average Points") +
   theme_minimal()
 
 ggsave("plots/quadratic_fit.png", p5, width = 10, height = 6, dpi = 300)
 
 p5_reg <- ggplot() +
-  geom_point(data = expected_points_by_zone_reg, aes(x = y_mid, y = avg_points), color = "blue") +
+  geom_point(data = expected_points_regression, aes(x = meter_x, y = Expected_Points), color = "blue") +
   geom_line(aes(x = y_dense_reg, y = fitted_dense_reg), color = "red", linewidth = 1) +
   labs(title = "Quadratic Fit to Average Points by Zone",
-       x = "y_mid",
+       x = "meter_x",
        y = "Average Points") +
   theme_minimal()
 
 ggsave("plots/quadratic_fit_reg.png", p5, width = 10, height = 6, dpi = 300)
 
 interpolate_quad <- function(x) {
-  predict(quad_fit, newdata = data.frame(y_mid = x))
+  predict(quad_fit_tmp, newdata = data.frame(meter_x = x))
 }
 
 interpolate_quad_reg <- function(x) {
-  predict(quad_fit_reg, newdata = data.frame(y_mid = x))
+  predict(quad_fit_reg, newdata = data.frame(meter_x = x))
 }
 
 grid <- grid %>%
@@ -776,7 +775,7 @@ plots <- lapply(y_shifts, function(shift) {
   
   grid_shifted <- grid %>%
     mutate(
-      avg_points_interp = pmin(interpolate_quad(y + shift), 3.74),  # cap at 3.74
+      avg_points_interp = pmin(interpolate_quad(y + shift), 4.17),
       point_diff = expected_points - avg_points_interp
     )
   
@@ -808,7 +807,7 @@ plots_reg <- lapply(y_shifts, function(shift) {
   
   grid_shifted_reg <- grid_reg %>%
     mutate(
-      avg_points_interp = pmin(interpolate_quad_reg(y + shift), 3.79),  # cap at 3.79
+      avg_points_interp = pmin(interpolate_quad_reg(y + shift), 4.96),
       point_diff = expected_points - avg_points_interp
     )
   
@@ -840,18 +839,18 @@ plots_reg <- lapply(y_shifts, function(shift) {
 
 y_shift <- -15
 
-marker_x <- -20
+marker_x <- 20
 marker_y <- 30
 
 grid_shifted <- grid %>%
   mutate(
-    avg_points_interp = pmin(interpolate_quad(y + y_shift), 3.74),
+    avg_points_interp = pmin(interpolate_quad(y + y_shift), 4.17),
     point_diff = expected_points - avg_points_interp
   )
 
 grid_shifted_reg <- grid %>%
   mutate(
-    avg_points_interp = pmin(interpolate_quad_reg(y + y_shift), 3.79),
+    avg_points_interp = pmin(interpolate_quad_reg(y + y_shift), 4.96),
     point_diff = expected_points - avg_points_interp
   )
 
@@ -928,73 +927,17 @@ marker_value_reg <- marker_value_reg %>%
 marker_value_reg
 
 
-# All Blacks vs South Africa Game
-
-sep_game_data_csv = read_csv("data/All Blacks vs South Africa Game Sep 16th.csv")
-
-sep_game_data_csv <- sep_game_data_csv %>%
-  rename(
-    x = `x location`,
-    y = `y location`
-  ) %>%
-  mutate(
-    x = x - 35
-  )
-  
-sep_game_data <- sep_game_data_csv %>%
-  left_join(grid, by = c("x", "y"))
-
-sep_game_data <- sep_game_data %>%
-  mutate(
-    optimal_decision = if_else(point_diff > 0, "lineout", "kick")
-  )
-
-decision_tbl <- sep_game_data %>%
-  select(Decision, optimal_decision, point_diff)
-print(decision_tbl)
-
-decision_tbl <- decision_tbl %>%
-  mutate(
-    missed_points = if_else(Decision == optimal_decision, 0, point_diff)
-  )
-print(decision_tbl)
-
-sum(abs(decision_tbl$missed_points))
-
-sep_game_data_reg <- sep_game_data_csv %>%
-  left_join(grid_reg, by = c("x", "y"))
-
-sep_game_data_reg <- sep_game_data_reg %>%
-  mutate(
-    optimal_decision = if_else(point_diff > 0, "lineout", "kick")
-  )
-
-decision_tbl_reg <- sep_game_data_reg %>%
-  select(Decision, optimal_decision, point_diff)
-print(decision_tbl_reg)
-
-decision_tbl_reg <- decision_tbl_reg %>%
-  mutate(
-    missed_points = if_else(Decision == optimal_decision, 0, point_diff)
-  )
-print(decision_tbl_reg)
-
-sum(abs(decision_tbl_reg$missed_points))
-
-
 # Graphing Decision Boundary
 
-
-# Not same location as SA
 marker_x <- -20
 marker_y <- 30
 
-y_shifts <- seq(0, -25, by = -1)
+y_shifts <- seq(0, -35, by = -1)
 
 shift_results <- lapply(y_shifts, function(shift) {
   grid_shifted <- grid %>%
     mutate(
-      avg_points_interp = pmin(interpolate_quad(y + shift), 3.74),
+      avg_points_interp = pmin(interpolate_quad(y + shift), 4.17),
       point_diff = expected_points - avg_points_interp
     )
   
@@ -1014,7 +957,7 @@ shift_results <- lapply(y_shifts, function(shift) {
 shift_results_reg <- lapply(y_shifts, function(shift) {
   grid_shifted_reg <- grid_reg %>%
     mutate(
-      avg_points_interp = pmin(interpolate_quad_reg(y + shift), 3.74),
+      avg_points_interp = pmin(interpolate_quad_reg(y + shift), 4.17),
       point_diff = expected_points - avg_points_interp
     )
   
@@ -1082,6 +1025,7 @@ delta_intercept <- ggplot(shift_results_long, aes(x = y_shift_plot, y = Expected
 
 ggsave("plots/delta_intercept_graph.png", delta_intercept, width = 12, height = 10, dpi = 300)
 
+
 delta_intercept_reg <- ggplot(shift_results_long_reg, aes(x = y_shift_plot, y = Expected_Points, color = Option)) +
   geom_line(size = 1.2) +
   geom_point(size = 2) +
@@ -1126,7 +1070,6 @@ EP_given_card <- zone_coefficients %>%
       WinPct_Diff * WinPct_Diff_Coef,
     EP_card    = EP_no_card + Card_Diff
   )
-
 
 EP_given_card
 
@@ -1260,3 +1203,59 @@ reg_plot_standard <- ggplot(EP_standard_subset, aes(x = Location, y = EP_standar
 
 ggsave("plots/reg_plot_standard.png", reg_plot_standard, width = 12, height = 10, dpi = 300)
 
+
+# All Blacks vs South Africa Game
+
+sep_game_data_csv = read_csv("data/All Blacks vs South Africa Game Sep 16th.csv")
+
+sep_game_data_csv <- sep_game_data_csv %>%
+  rename(
+    x = `x location`,
+    y = `y location`
+  ) %>%
+  mutate(
+    x = x - 35,
+    y = y
+  )
+
+# Example #4 Values
+
+
+x_value <- 20
+y_value <- 30
+Seconds_Remaining_Half_val <- 1110
+Home_Attack_val <- 0
+WinPct_Diff_val <- 0
+Card_Diff_val <- 0
+distance_from_try <- data.frame(zone_meters = 30)
+
+intercepts <- intercepts %>%
+  mutate(Location = factor(Location, levels = zones_order)) %>%
+  arrange(Location) %>%
+  mutate(zone_meters = zone_meters)
+
+intercept_fit <- lm(estimate ~ poly(zone_meters, 2), data = intercepts)
+
+predicted_intercept <- predict(intercept_fit, newdata = distance_from_try)
+
+coeffs_zone <- zone_coefficients %>%
+  filter(Location == "10m-22m (opp)") %>%
+  select(term, estimate) %>%
+  pivot_wider(names_from = term, values_from = estimate)
+
+coeffs_zone <- coeffs_zone %>%
+  mutate(`(Intercept)` = predicted_intercept)
+
+EP_lineout <- coeffs_zone$`(Intercept)` +
+  coeffs_zone$Seconds_Remaining_Half * Seconds_Remaining_Half_val +
+  coeffs_zone$Home_Attack * Home_Attack_val +
+  coeffs_zone$WinPct_Diff * WinPct_Diff_val +
+  coeffs_zone$Card_Diff * Card_Diff_val
+
+EP_lineout
+
+EP_Kick <- grid %>%
+  filter(x == x_value, y == y_value) %>%
+  pull(expected_points)
+
+EP_Kick
