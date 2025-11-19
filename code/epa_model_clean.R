@@ -297,51 +297,64 @@ ggplot(plot_data, aes(x = meter_line, y = expected_points)) +
 ### Kick Expected Points ###
 ############################
 
-# Coefficients from logistic regression
-beta_angle <- 0.45
-beta_distance <- -0.022
-intercept <- -1.78
+# GAM Model for Kick Percentage
 
+saved_gam <- readRDS("gam_model.rds")
+
+exp_points_on_miss <- 0.74
+exp_points_on_success <- 3
+
+# Pitch grid values
 x_vals <- seq(-35, 35, by = 1)
-y_vals <- seq(5, 65, by = 1)
+y_vals <- seq(5, 60, by = 1)
 grid <- expand.grid(x = x_vals, y = y_vals)
 
-# SET THIS AS DEFAULT VALUE, CORRECT IF NOT SO
 post_half_width <- 2.81
 
-# logistic function
-logit_prob <- function(angle, distance) {
-  1 / (1 + exp(-(beta_angle * angle + beta_distance * distance + intercept)))
-}
-
-compute_expected_points <- function(x, y, post_half_width = 2.81) {
-  # positions of the posts along the x-axis
+compute_kicking_angle <- function(x, y, post_half_width = 2.81) {
   left_post_x  <- -post_half_width
   right_post_x <-  post_half_width
   
-  # distances to the posts from kicker at (x, y)
-  angle_left  <- atan2(x + left_post_x, y)
-  angle_right <- atan2(x - right_post_x, y)
+  # angle from kicker to each post
+  angle_left  <- atan2(left_post_x - x, y)
+  angle_right <- atan2(right_post_x - x, y)
   
   # angular width of target
-  angle <- angle_right - angle_left
-  
-  # logistic probability
-  distance <- sqrt(x^2 + y^2)
-  prob_raw <- logit_prob(angle, distance)
-  
-  prob_raw
+  angle_width <- angle_right - angle_left
+  angle_width
 }
 
 grid <- grid %>%
   mutate(
-    prob_raw_pos = compute_expected_points(x, y),
-    prob_raw_neg = compute_expected_points(-x, y),  # mirror kicker position
-    prob_raw_max = pmax(prob_raw_pos, prob_raw_neg)
-  ) %>%
-  mutate(
-    prob = prob_raw_max / max(prob_raw_max),
-    expected_points = prob * 3 + (1-prob)*0.74    # 0.74 obtained from expected points following a 22 meter drop out
+    kicking_angle = compute_kicking_angle(x_vals, y, post_half_width),
+    distance_to_center = sqrt(x^2 + y^2)
   )
+
+grid$prob <- predict(saved_gam,
+                     newdata = grid %>% select(kicking_angle, distance_to_center),
+                     type = "response")
+
+grid <- grid %>%
+  mutate(expected_points = prob * exp_points_on_success + (1 - prob) * exp_points_on_miss)
+
+# Plotting kicking heatmap
+
+thresholds <- c(0.8, 0.6, 0.4, 0.2)
+
+ggplot(grid, aes(x = x, y = y, fill = expected_points)) +
+  geom_tile() +
+  geom_contour(aes(z = expected_points),
+               breaks = thresholds,
+               color = "white",
+               linewidth = 0.8,
+               linetype = "dashed") +
+  scale_fill_viridis_c(option = "magma", name = "Expected Prob") +
+  coord_fixed() +
+  labs(
+    title = "Expected Prooints of Kick",
+    x = "Lateral position (m)",
+    y = "Distance from goal line (m)"
+  ) +
+  theme_minimal()
 
 

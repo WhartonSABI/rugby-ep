@@ -1055,7 +1055,6 @@ ggsave("plots/delta_intercept_graph_reg.png", delta_intercept_reg, width = 12, h
 # Shifting Variables in Regression Equation
 
 # Set scenario values
-
 Less_Than_2_Min_Coef <- 0
 Home_Attack_Coef <- 1
 WinPct_Diff_Coef <- 0
