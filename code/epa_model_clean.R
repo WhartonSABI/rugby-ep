@@ -206,7 +206,7 @@ sampled_phase_data <- phase_data %>%
 # Plotting Marginals
 
 # Meter line
-ggplot(sampled_phase_data, aes(x = meter_line, y = points)) +
+meter_line_marginal <- ggplot(sampled_phase_data, aes(x = meter_line, y = points)) +
   geom_point(alpha = 0.3, size = 2) +
   geom_smooth(method = "loess", se = TRUE) +
   labs(
@@ -215,6 +215,9 @@ ggplot(sampled_phase_data, aes(x = meter_line, y = points)) +
     y = "Points"
   ) +
   theme_minimal(base_size = 14)
+
+ggsave("clean_plots/meter_line_marginal.png", meter_line_marginal,
+       width = 10, height = 8, dpi = 300)
 
 # Seconds remaining in half
 ggplot(sampled_phase_data, aes(x = Seconds_Remaining_Half, y = points)) +
@@ -259,7 +262,7 @@ ggplot(sampled_phase_data, aes(x = factor(Card_Diff), y = points)) +
   theme_minimal(base_size = 14)
 
 
-regression <- lm(points ~ meter_line + Home_Attack + Card_Diff,
+regression <- lm(points ~ meter_line + Home_Attack + Card_Diff + WinPct_Diff,
                  data = sampled_phase_data)
 
 summary(regression)
@@ -268,15 +271,16 @@ summary(regression)
 # Plotting EP of Lineout
 
 # Regression coefficients
-intercept <- 2.838467
-coef_meter <- -0.060002
-coef_home <- 0.925027
-coef_card <- 0.979793
+intercept <- 2.72591
+coef_meter <- -0.05784
+coef_home <- 1.00477
+coef_card <- 0.84649
+coef_win_per <- 0.77876
 
 meter_seq <- seq(0, 100, by = 1)
 
 expected_points <- intercept + coef_meter * meter_seq + 
-  coef_home * 1 + coef_card * 0
+  coef_home * 1 + coef_card * 0 + coef_win_per * 0
 
 plot_data <- data.frame(
   meter_line = meter_seq,
@@ -337,13 +341,13 @@ grid$prob <- predict(saved_gam,
 grid <- grid %>%
   mutate(expected_points = prob * exp_points_on_success + (1 - prob) * exp_points_on_miss)
 
-# Plotting kicking heatmap
+# Plotting probability of successful penalty kick
 
 thresholds <- c(0.8, 0.6, 0.4, 0.2)
 
-ggplot(grid, aes(x = x, y = y, fill = expected_points)) +
+ggplot(grid, aes(x = x, y = y, fill = prob)) +
   geom_tile() +
-  geom_contour(aes(z = expected_points),
+  geom_contour(aes(z = prob),
                breaks = thresholds,
                color = "white",
                linewidth = 0.8,
@@ -351,10 +355,497 @@ ggplot(grid, aes(x = x, y = y, fill = expected_points)) +
   scale_fill_viridis_c(option = "magma", name = "Expected Prob") +
   coord_fixed() +
   labs(
-    title = "Expected Prooints of Kick",
+    title = "Success Probability of a Kick",
     x = "Lateral position (m)",
     y = "Distance from goal line (m)"
   ) +
   theme_minimal()
+
+# Expected Points of a Penalty Kick
+
+ggplot(grid, aes(x = x, y = y, fill = expected_points)) +
+  geom_tile() +
+  scale_fill_viridis_c(option = "magma", name = "Expected Prob") +
+  coord_fixed() +
+  labs(
+    title = "Expected Points of a Penalty Kick",
+    x = "Lateral position (m)",
+    y = "Distance from goal line (m)"
+  ) +
+  theme_minimal()
+
+#################################
+### Comparing Expected Points ###
+#################################
+
+# Plotting Difference in Expected Points Across Pitch
+
+plot_data <- plot_data %>%
+  rename(lineout_ep = expected_points)
+
+grid <- grid %>%
+  left_join(plot_data, by = c("y" = "meter_line")) %>%
+  rename(kick_ep = expected_points) %>%
+  mutate(
+    point_diff = lineout_ep - kick_ep
+)
+
+# EP of Lineout minus EP of penalty kick 
+# Assumes all coeffs = 0 expect meter_line, home, and intercept
+# Also assumes no advancing of lineout from penalty location
+
+ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
+  geom_raster(interpolate = TRUE) +
+  scale_fill_gradient2(
+    low = "#457B9D",
+    mid = "white",
+    high = "#E76F51",
+    midpoint = 0,
+    name = "Lineout - Kick"
+  ) +
+  coord_fixed() +
+  labs(
+    title = "Point Differential: Lineout EP – Kick EP",
+    x = "Field Width (x)",
+    y = "Field Length (y)",
+    fill = "Point Diff"
+  ) +
+  theme_minimal(base_size = 14)
+
+# Shifting location of lineout forward
+
+max_lineout_ep <- max(grid$lineout_ep)
+
+y_shifts <- c(0, -5, -10, -15, -20, -25)
+
+plots <- lapply(y_shifts, function(shift) {
+  
+  # Shift y and lookup shifted EP
+  grid_shifted <- grid %>%
+    mutate(y_shifted = y + shift) %>%
+    
+    left_join(
+      grid %>%
+        select(x, y, lineout_ep) %>%
+        rename(y_shifted = y, lineout_ep_shifted = lineout_ep),
+      by = c("x", "y_shifted")
+    ) %>%
+    
+    # If y_shifted < min(y), then lineout_ep_shifted becomes NA — replace with max
+    mutate(
+      lineout_ep_shifted = ifelse(
+        is.na(lineout_ep_shifted),
+        max_lineout_ep,
+        lineout_ep_shifted
+      ),
+      point_diff_shifted = lineout_ep_shifted - kick_ep
+    )
+  
+  ggplot(grid_shifted, aes(x = x, y = y, fill = point_diff_shifted)) +
+    geom_raster(interpolate = TRUE) +
+    scale_fill_gradient2(
+      low = "#457B9D",
+      mid = "white",      
+      high = "#E76F51",
+      midpoint = 0,
+      name = "Lineout - Kick"
+    ) +
+    coord_fixed() +
+    labs(
+      title = paste0("Point Differential (y shift = ", shift, ")"),
+      x = "Lateral position (m)",
+      y = "Distance from goal line (m)"
+    ) +
+    theme_minimal(base_size = 14)
+})
+
+######################################
+### Making y-shift intercept graph ###
+######################################
+
+marker_x <- 19
+marker_y <- 40
+
+y_shifts <- seq(0, -30, by = -1)
+
+max_lineout_ep <- max(grid$lineout_ep)   # EP at y = 5 (the min y)
+
+shift_results <- lapply(y_shifts, function(shift) {
+  
+  grid_shifted <- grid %>%
+    mutate(
+      y_shifted = y + shift
+    ) %>%
+    left_join(
+      grid %>%
+        select(x, y, lineout_ep) %>%
+        rename(y_shifted = y, lineout_ep_shifted = lineout_ep),
+      by = c("x", "y_shifted")
+    ) %>%
+    mutate(
+      lineout_ep_shifted = ifelse(is.na(lineout_ep_shifted),
+                                  max_lineout_ep,
+                                  lineout_ep_shifted)
+    )
+  
+  marker_val <- grid_shifted %>%
+    mutate(dist = sqrt((x - marker_x)^2 + (y - marker_y)^2)) %>%
+    slice_min(dist, n = 1) %>%
+    select(kick_ep, lineout_ep_shifted)
+  
+  tibble(
+    y_shift = shift,
+    kick_EP = marker_val$kick_ep,
+    lineout_EP = marker_val$lineout_ep_shifted
+  )
+}) %>%
+  bind_rows()
+
+shift_results_long <- shift_results %>%
+  tidyr::pivot_longer(
+    cols = c(kick_EP, lineout_EP),
+    names_to = "Option",
+    values_to = "Expected_Points"
+  ) %>%
+  mutate(
+    Option = recode(Option,
+                    kick_EP = "Kick",
+                    lineout_EP = "Lineout")
+  )
+
+shift_results_long <- shift_results_long %>%
+  mutate(y_shift_plot = -y_shift)
+
+shift_intercept <- -with(shift_results,
+                   y_shifts[which.min(abs(kick_EP - lineout_EP))])
+
+delta_plot <- ggplot(shift_results_long,
+                     aes(x = y_shift_plot, y = Expected_Points, color = Option)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  geom_vline(xintercept = shift_intercept, linetype = "dashed", color = "black") +
+  annotate(
+    "text",
+    x = shift_intercept + 1,
+    y = max(shift_results_long$Expected_Points),
+    label = sprintf("Break-even shift = %.1f m", shift_intercept),
+    vjust = -0.5,
+    hjust = 0
+  ) +
+  theme_minimal(base_size = 14) +
+  labs(
+    title = paste0("Expected Points vs Lineout Shift at (", marker_x, ", ", marker_y, ")"),
+    x = "Shift in Y (metres gained from kick to touch)",
+    y = "Expected Points",
+    color = "Option"
+  )
+
+
+#########################
+### Scenario Analysis ###
+#########################
+
+# Scenario 1 - Home vs Away
+
+y_shift <- -20
+
+meter_seq <- seq(0, 100, by = 1)
+
+expected_points <- intercept + coef_meter * meter_seq + 
+  coef_home * 1 + coef_card * 0 + coef_win_per * 0
+
+plot_data <- data.frame(
+  meter_line = meter_seq,
+  expected_points = expected_points
+)
+
+scenario_max_lineout_ep <- max(plot_data$expected_points)
+
+grid_scenario <- grid %>%
+  select(-lineout_ep) %>%
+  left_join(plot_data, by = c("y" = "meter_line")) %>%
+  rename(lineout_ep = expected_points)
+
+grid_scenario <- grid_scenario %>%
+  mutate(
+    lineout_ep_shifted = pmin(lineout_ep, max(lineout_ep)),
+    lineout_ep_shifted = approx(y, lineout_ep, xout = y + y_shift, rule = 2)$y,
+    
+    point_diff = lineout_ep_shifted - kick_ep
+  )
+
+# Home team
+ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
+  geom_tile() +
+  scale_fill_gradient2(
+    low = "#457B9D",
+    mid = "white",
+    high = "#E76F51",
+    midpoint = 0,
+    name = "Lineout - Kick"
+  ) +
+  coord_fixed() +
+  labs(
+    title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
+    x = "Lateral position (m)",
+    y = "Distance from goal line (m)"
+  ) +
+  theme_minimal(base_size = 14)
+
+expected_points <- intercept + coef_meter * meter_seq + 
+  coef_home * 0 + coef_card * 0 + coef_win_per * 0
+
+plot_data <- data.frame(
+  meter_line = meter_seq,
+  expected_points = expected_points
+)
+
+scenario_max_lineout_ep <- max(plot_data$expected_points)
+
+grid_scenario <- grid %>%
+  select(-lineout_ep) %>%
+  left_join(plot_data, by = c("y" = "meter_line")) %>%
+  rename(lineout_ep = expected_points)
+
+grid_scenario <- grid_scenario %>%
+  mutate(
+    lineout_ep_shifted = pmin(lineout_ep, max(lineout_ep)),
+    lineout_ep_shifted = approx(y, lineout_ep, xout = y + y_shift, rule = 2)$y,
+    
+    point_diff = lineout_ep_shifted - kick_ep
+  )
+
+# Away team
+ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
+  geom_tile() +
+  scale_fill_gradient2(
+    low = "#457B9D",
+    mid = "white",
+    high = "#E76F51",
+    midpoint = 0,
+    name = "Lineout - Kick"
+  ) +
+  coord_fixed() +
+  labs(
+    title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
+    x = "Lateral position (m)",
+    y = "Distance from goal line (m)"
+  ) +
+  theme_minimal(base_size = 14)
+
+
+# Scenario 2 - Yellow Cards
+
+expected_points <- intercept + coef_meter * meter_seq + 
+  coef_home * 0 + coef_card * 1 + coef_win_per * 0
+
+plot_data <- data.frame(
+  meter_line = meter_seq,
+  expected_points = expected_points
+)
+
+scenario_max_lineout_ep <- max(plot_data$expected_points)
+
+grid_scenario <- grid %>%
+  select(-lineout_ep) %>%
+  left_join(plot_data, by = c("y" = "meter_line")) %>%
+  rename(lineout_ep = expected_points)
+
+grid_scenario <- grid_scenario %>%
+  mutate(
+    lineout_ep_shifted = pmin(lineout_ep, max(lineout_ep)),
+    lineout_ep_shifted = approx(y, lineout_ep, xout = y + y_shift, rule = 2)$y,
+    
+    point_diff = lineout_ep_shifted - kick_ep
+  )
+
+# Opponent has yellow card
+ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
+  geom_tile() +
+  scale_fill_gradient2(
+    low = "#457B9D",
+    mid = "white",
+    high = "#E76F51",
+    midpoint = 0,
+    name = "Lineout - Kick"
+  ) +
+  coord_fixed() +
+  labs(
+    title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
+    x = "Lateral position (m)",
+    y = "Distance from goal line (m)"
+  ) +
+  theme_minimal(base_size = 14)
+
+
+expected_points <- intercept + coef_meter * meter_seq + 
+  coef_home * 0 + coef_card * 0 + coef_win_per * 0
+
+plot_data <- data.frame(
+  meter_line = meter_seq,
+  expected_points = expected_points
+)
+
+scenario_max_lineout_ep <- max(plot_data$expected_points)
+
+grid_scenario <- grid %>%
+  select(-lineout_ep) %>%
+  left_join(plot_data, by = c("y" = "meter_line")) %>%
+  rename(lineout_ep = expected_points)
+
+grid_scenario <- grid_scenario %>%
+  mutate(
+    lineout_ep_shifted = pmin(lineout_ep, max(lineout_ep)),
+    lineout_ep_shifted = approx(y, lineout_ep, xout = y + y_shift, rule = 2)$y,
+    
+    point_diff = lineout_ep_shifted - kick_ep
+  )
+
+# No difference in yellow cards
+ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
+  geom_tile() +
+  scale_fill_gradient2(
+    low = "#457B9D",
+    mid = "white",
+    high = "#E76F51",
+    midpoint = 0,
+    name = "Lineout - Kick"
+  ) +
+  coord_fixed() +
+  labs(
+    title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
+    x = "Lateral position (m)",
+    y = "Distance from goal line (m)"
+  ) +
+  theme_minimal(base_size = 14)
+
+
+expected_points <- intercept + coef_meter * meter_seq + 
+  coef_home * 0 + coef_card * -1 + coef_win_per * 0
+
+plot_data <- data.frame(
+  meter_line = meter_seq,
+  expected_points = expected_points
+)
+
+scenario_max_lineout_ep <- max(plot_data$expected_points)
+
+grid_scenario <- grid %>%
+  select(-lineout_ep) %>%
+  left_join(plot_data, by = c("y" = "meter_line")) %>%
+  rename(lineout_ep = expected_points)
+
+grid_scenario <- grid_scenario %>%
+  mutate(
+    lineout_ep_shifted = pmin(lineout_ep, max(lineout_ep)),
+    lineout_ep_shifted = approx(y, lineout_ep, xout = y + y_shift, rule = 2)$y,
+    
+    point_diff = lineout_ep_shifted - kick_ep
+  )
+
+# You have a yellow card
+ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
+  geom_tile() +
+  scale_fill_gradient2(
+    low = "#457B9D",
+    mid = "white",
+    high = "#E76F51",
+    midpoint = 0,
+    name = "Lineout - Kick"
+  ) +
+  coord_fixed() +
+  labs(
+    title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
+    x = "Lateral position (m)",
+    y = "Distance from goal line (m)"
+  ) +
+  theme_minimal(base_size = 14)
+
+
+# Scenario 3 - Team Quality
+
+expected_points <- intercept + coef_meter * meter_seq + 
+  coef_home * 0 + coef_card * 0 + coef_win_per * -0.25
+
+plot_data <- data.frame(
+  meter_line = meter_seq,
+  expected_points = expected_points
+)
+
+scenario_max_lineout_ep <- max(plot_data$expected_points)
+
+grid_scenario <- grid %>%
+  select(-lineout_ep) %>%
+  left_join(plot_data, by = c("y" = "meter_line")) %>%
+  rename(lineout_ep = expected_points)
+
+grid_scenario <- grid_scenario %>%
+  mutate(
+    lineout_ep_shifted = pmin(lineout_ep, max(lineout_ep)),
+    lineout_ep_shifted = approx(y, lineout_ep, xout = y + y_shift, rule = 2)$y,
+    
+    point_diff = lineout_ep_shifted - kick_ep
+  )
+
+# Bad team
+ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
+  geom_tile() +
+  scale_fill_gradient2(
+    low = "#457B9D",
+    mid = "white",
+    high = "#E76F51",
+    midpoint = 0,
+    name = "Lineout - Kick"
+  ) +
+  coord_fixed() +
+  labs(
+    title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
+    x = "Lateral position (m)",
+    y = "Distance from goal line (m)"
+  ) +
+  theme_minimal(base_size = 14)
+
+
+
+expected_points <- intercept + coef_meter * meter_seq + 
+  coef_home * 0 + coef_card * 0 + coef_win_per * 0.25
+
+plot_data <- data.frame(
+  meter_line = meter_seq,
+  expected_points = expected_points
+)
+
+scenario_max_lineout_ep <- max(plot_data$expected_points)
+
+grid_scenario <- grid %>%
+  select(-lineout_ep) %>%
+  left_join(plot_data, by = c("y" = "meter_line")) %>%
+  rename(lineout_ep = expected_points)
+
+grid_scenario <- grid_scenario %>%
+  mutate(
+    lineout_ep_shifted = pmin(lineout_ep, max(lineout_ep)),
+    lineout_ep_shifted = approx(y, lineout_ep, xout = y + y_shift, rule = 2)$y,
+    
+    point_diff = lineout_ep_shifted - kick_ep
+  )
+
+# Good team
+ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
+  geom_tile() +
+  scale_fill_gradient2(
+    low = "#457B9D",
+    mid = "white",
+    high = "#E76F51",
+    midpoint = 0,
+    name = "Lineout - Kick"
+  ) +
+  coord_fixed() +
+  labs(
+    title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
+    x = "Lateral position (m)",
+    y = "Distance from goal line (m)"
+  ) +
+  theme_minimal(base_size = 14)
 
 
