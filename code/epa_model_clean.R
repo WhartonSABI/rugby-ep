@@ -1,32 +1,18 @@
-##################
-### REFERENCES ###
-##################
+#############
+### SETUP ###
+#############
 
-## Links to Article
-# https://www.data-ruck.com/blog/predicting-kicks-outcome/
-# https://journals.sagepub.com/doi/10.1177/22150218251365220
-
-## Data Download Link
-# https://zenodo.org/api/records/13851563/files-archive
-
-# Goal Kicking Data
-# https://www.sciencedirect.com/science/article/pii/S1440244014000255
-
-################
-### PACKAGES ###
-################
+# Packages
 
 # install.packages("patchwork")
 library(patchwork)
-
 # install.packages("stringr")
 library(stringr)
-
 # install.packages("tidyverse")
 library(tidyverse)
 
-# install.packages("dplyr")
-library(dplyr)
+# Seed for randomization
+set.seed(11-19-2025)
 
 #######################
 ### PHASE DATA LOAD ###
@@ -51,16 +37,13 @@ phase_data <- phase_data %>%
   )
 
 # Keeping just first phases beginning with lineouts
-
 phase_data <- phase_data %>%
   filter(
     Play_Start == "Lineout",
-    Location %in% zones,
     Phase == 1
   )
 
 # Getting final score of the match
-
 last_play <- phase_data %>%
   group_by(Round, Home, Away) %>%
   filter(ID == max(ID)) %>%
@@ -98,6 +81,7 @@ last_play <- last_play %>%
   ) %>%
   arrange(Team, Round)
 
+# Get running win percentages
 last_play <- last_play %>%
   group_by(Team) %>%
   arrange(Round) %>%
@@ -108,54 +92,47 @@ last_play <- last_play %>%
   ) %>%
   ungroup()
 
+# Get teams in possession
 phase_data <- phase_data %>%
   mutate(
     Team_for_join = case_when(
       Team_In_Poss == "Home" ~ Home,
       Team_In_Poss == "Away" ~ Away
     )
-  )
-
-phase_data <- phase_data %>%
+  ) %>%
+# Add in win percentage for team in possession
   left_join(
     last_play %>% select(Team, Round, WinPct_Before),
     by = c("Team_for_join" = "Team", "Round" = "Round")
   )
 
-# Home and away column
-
+# Define which team is in possession
 phase_data <- phase_data %>%
   mutate(
     Home_Attack = if_else(Team_In_Poss == "Home", 1, 0)
   )
 
-# Win percent differential
-
+# Get opponent data
 phase_data <- phase_data %>%
   mutate(
     Opponent = if_else(Team_In_Poss == "Home", Away, Home)
   ) %>%
     left_join(
-      team_games %>% select(Team, Round, WinPct_Before) %>%
+      last_play %>% select(Team, Round, WinPct_Before) %>%
         rename(Opponent = Team,
                Opponent_WinPct = WinPct_Before),
       by = c("Opponent", "Round")
-    )
-
-phase_data <- phase_data %>%
+    ) %>%
   mutate(
-    WinPct_Diff = WinPct_Before - Opponent_WinPct
-  )
-
-# Card differential
-
-phase_data <- phase_data %>%
-  mutate(
+    # Win percent differential
+    WinPct_Diff = WinPct_Before - Opponent_WinPct,
+    # Card differential
     Card_Diff = (Yellow_Cards_Opp + Red_Cards_Opp) - (Yellow_Cards_Own + Red_Cards_Own)
   )
 
-# Seconds remaining in half
 
+
+# Seconds remaining in half
 phase_data <- phase_data %>%
   mutate(
     Seconds_Remaining_Half = if_else(
@@ -172,9 +149,7 @@ phase_data <- phase_data %>%
     Less_Than_2_Min = if_else(Seconds_Remaining_Half < 120, 1, 0)
   )
 
-# Binary if lineout part of consecutive plays with same outcome without change
-# in possession
-
+# Binary if lineout part of consecutive plays with same outcome without change in possesion
 phase_data <- phase_data %>%
   arrange(Round, Home, Away, ID) %>%
   group_by(Round, Home, Away) %>%
@@ -185,7 +160,6 @@ phase_data <- phase_data %>%
   ungroup()
 
 # Adding meter line of play start
-
 location_names <- c("5m-Goal (opp)", "22m-5m (opp)", "10m-22m (opp)",
                     "Half-10m (opp)","10m-Half (own)", "22m-10m (own)",
                     "5m-22m (own)", "Goal-5m (own)")
@@ -195,15 +169,16 @@ lookup <- setNames(location_meters, location_names)
 
 phase_data$meter_line <- lookup[phase_data$Location]
 
-# Sampling one random observation from consecutive lineouts
-
+# Sampling one random observation from consecutive lineouts within a single possession
 sampled_phase_data <- phase_data %>%
   arrange(Round, Home, Away, ID) %>%
   group_by(Round, Home, Away, run_id) %>%
   slice_sample(n = 1) %>% 
   ungroup()
 
-# Plotting Marginals
+#############
+### PLOTS ###
+#############
 
 # Meter line
 meter_line_marginal <- ggplot(sampled_phase_data, aes(x = meter_line, y = points)) +
@@ -312,9 +287,9 @@ ep_by_meter_line <- ggplot(plot_data, aes(x = meter_line, y = expected_points)) 
 ggsave("clean_plots/ep_by_meter_line.png", ep_by_meter_line,
        width = 10, height = 8, dpi = 300)
 
-############################
-### Kick Expected Points ###
-############################
+###############################
+### KICKING EXPECTED POINTS ###
+###############################
 
 # GAM Model for Kick Percentage
 
@@ -396,9 +371,9 @@ ggsave("clean_plots/kick_ep_plot.png", kick_ep_plot,
        width = 10, height = 8, dpi = 300)
 
 
-#################################
-### Comparing Expected Points ###
-#################################
+#########################
+### MAKING A DECISION ###
+#########################
 
 # Plotting Difference in Expected Points Across Pitch
 
@@ -489,9 +464,9 @@ plots <- lapply(y_shifts, function(shift) {
   p
 })
 
-######################################
-### Making y-shift intercept graph ###
-######################################
+######################
+### LINEOUT SHIFTS ###
+######################
 
 marker_x <- 19
 marker_y <- 40
@@ -573,9 +548,9 @@ delta_plot <- ggplot(shift_results_long,
 ggsave("clean_plots/delta_plot.png", delta_plot,
        width = 10, height = 8, dpi = 300)
 
-#########################
-### Scenario Analysis ###
-#########################
+##########################
+### SITUATION ANALYSIS ###
+##########################
 
 # Scenario 1 - Home vs Away
 
@@ -903,3 +878,16 @@ ggsave("clean_plots/good_team.png", good_team,
        width = 10, height = 8, dpi = 300)
 
 
+##################
+### REFERENCES ###
+##################
+
+## Links to Article
+# https://www.data-ruck.com/blog/predicting-kicks-outcome/
+# https://journals.sagepub.com/doi/10.1177/22150218251365220
+
+## Data Download Link
+# https://zenodo.org/api/records/13851563/files-archive
+
+# Goal Kicking Data
+# https://www.sciencedirect.com/science/article/pii/S1440244014000255
