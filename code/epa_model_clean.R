@@ -172,4 +172,176 @@ phase_data <- phase_data %>%
     Less_Than_2_Min = if_else(Seconds_Remaining_Half < 120, 1, 0)
   )
 
+# Binary if lineout part of consecutive plays with same outcome without change
+# in possession
+
+phase_data <- phase_data %>%
+  arrange(Round, Home, Away, ID) %>%
+  group_by(Round, Home, Away) %>%
+  mutate(
+    run_id = cumsum(c(TRUE, diff(Points_Difference) != 0 | Outcome[-1] != Outcome[-n()])),
+    n_same = ave(run_id, run_id, FUN = length), # count observations in each run
+  ) %>%
+  ungroup()
+
+# Adding meter line of play start
+
+location_names <- c("5m-Goal (opp)", "22m-5m (opp)", "10m-22m (opp)",
+                    "Half-10m (opp)","10m-Half (own)", "22m-10m (own)",
+                    "5m-22m (own)", "Goal-5m (own)")
+location_meters <- c(2.5, 13.5, 31, 45, 55, 69, 86.5, 97.5)
+
+lookup <- setNames(location_meters, location_names)
+
+phase_data$meter_line <- lookup[phase_data$Location]
+
+# Sampling one random observation from consecutive lineouts
+
+sampled_phase_data <- phase_data %>%
+  arrange(Round, Home, Away, ID) %>%
+  group_by(Round, Home, Away, run_id) %>%
+  slice_sample(n = 1) %>% 
+  ungroup()
+
+# Plotting Marginals
+
+# Meter line
+ggplot(sampled_phase_data, aes(x = meter_line, y = points)) +
+  geom_point(alpha = 0.3, size = 2) +
+  geom_smooth(method = "loess", se = TRUE) +
+  labs(
+    title = "Points vs Meter Line (Marginal Relationship)",
+    x = "Meter Line",
+    y = "Points"
+  ) +
+  theme_minimal(base_size = 14)
+
+# Seconds remaining in half
+ggplot(sampled_phase_data, aes(x = Seconds_Remaining_Half, y = points)) +
+  geom_point(alpha = 0.3, size = 2) +
+  geom_smooth(method = "loess", se = TRUE) +
+  labs(
+    title = "Points vs Seconds Remaining in Half (Marginal Relationship)",
+    x = "Seconds_Remaining_Half",
+    y = "Points"
+  ) +
+  theme_minimal(base_size = 14)
+
+# Home lineout possession
+ggplot(sampled_phase_data, aes(x = factor(Home_Attack), y = points)) +
+  geom_boxplot(fill = "grey80") +
+  labs(
+    title = "Points by Home Attack",
+    x = "Home Attack (0 = Away Attack, 1 = Home Attack)",
+    y = "Points"
+  ) +
+  theme_minimal(base_size = 14)
+
+# Win Percent Differential
+ggplot(sampled_phase_data, aes(x = WinPct_Diff, y = points)) +
+  geom_point(alpha = 0.3, size = 2) +
+  geom_smooth(method = "loess", se = TRUE) +
+  labs(
+    title = "Points vs WinPct_Diff (Marginal Relationship)",
+    x = "WinPct_Diff",
+    y = "Points"
+  ) +
+  theme_minimal(base_size = 14)
+
+# Card Differential
+ggplot(sampled_phase_data, aes(x = factor(Card_Diff), y = points)) +
+  geom_boxplot(fill = "lightblue") +
+  labs(
+    title = "Points by Card Differential",
+    x = "Card Differential (Own - Opponent)",
+    y = "Points"
+  ) +
+  theme_minimal(base_size = 14)
+
+
+regression <- lm(points ~ meter_line + Home_Attack + Card_Diff,
+                 data = sampled_phase_data)
+
+summary(regression)
+
+
+# Plotting EP of Lineout
+
+# Regression coefficients
+intercept <- 2.838467
+coef_meter <- -0.060002
+coef_home <- 0.925027
+coef_card <- 0.979793
+
+meter_seq <- seq(0, 100, by = 1)
+
+expected_points <- intercept + coef_meter * meter_seq + 
+  coef_home * 1 + coef_card * 0
+
+plot_data <- data.frame(
+  meter_line = meter_seq,
+  expected_points = expected_points
+)
+
+ggplot(plot_data, aes(x = meter_line, y = expected_points)) +
+  geom_line(size = 1.2, color = "blue") +
+  labs(
+    title = "Expected Points by Meter Line",
+    subtitle = "Assuming Home_Attack = 1 and Card_Diff = 0",
+    x = "Meter Line",
+    y = "Expected Points"
+  ) +
+  theme_minimal(base_size = 14)
+
+############################
+### Kick Expected Points ###
+############################
+
+# Coefficients from logistic regression
+beta_angle <- 0.45
+beta_distance <- -0.022
+intercept <- -1.78
+
+x_vals <- seq(-35, 35, by = 1)
+y_vals <- seq(5, 65, by = 1)
+grid <- expand.grid(x = x_vals, y = y_vals)
+
+# SET THIS AS DEFAULT VALUE, CORRECT IF NOT SO
+post_half_width <- 2.81
+
+# logistic function
+logit_prob <- function(angle, distance) {
+  1 / (1 + exp(-(beta_angle * angle + beta_distance * distance + intercept)))
+}
+
+compute_expected_points <- function(x, y, post_half_width = 2.81) {
+  # positions of the posts along the x-axis
+  left_post_x  <- -post_half_width
+  right_post_x <-  post_half_width
+  
+  # distances to the posts from kicker at (x, y)
+  angle_left  <- atan2(x + left_post_x, y)
+  angle_right <- atan2(x - right_post_x, y)
+  
+  # angular width of target
+  angle <- angle_right - angle_left
+  
+  # logistic probability
+  distance <- sqrt(x^2 + y^2)
+  prob_raw <- logit_prob(angle, distance)
+  
+  prob_raw
+}
+
+grid <- grid %>%
+  mutate(
+    prob_raw_pos = compute_expected_points(x, y),
+    prob_raw_neg = compute_expected_points(-x, y),  # mirror kicker position
+    prob_raw_max = pmax(prob_raw_pos, prob_raw_neg)
+  ) %>%
+  mutate(
+    prob = prob_raw_max / max(prob_raw_max),
+    expected_points = prob * 3 + (1-prob)*0.74    # 0.74 obtained from expected points following a 22 meter drop out
+  )
+
 

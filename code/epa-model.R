@@ -42,7 +42,7 @@ head(phase_data)
 
 ########################
 ### DATA EXPLORATION ###
-#######################
+########################
 
 # location where the phase began, determined determined by the metre lines dividing the pitch
 unique(phase_data$Location)
@@ -440,7 +440,6 @@ print(expected_points_by_zone)
 
 field_lines <- c(5, 22, 40, 50, 60, 78, 95)
 line_names <- c("5m (opp)", "22m (opp)", "10m (opp)", "Half", "10m (own)", "22m (own)", "5m (own)")
-
 zone_meters <- c(2.5, 13.5, 31, 45, 55, 69, 86.5, 97.5)
 
 expected_points_by_zone$Location <- factor(expected_points_by_zone$Location, levels = zones_order)
@@ -553,7 +552,7 @@ beta_distance <- -0.022
 intercept <- -1.78
 
 x_vals <- seq(-35, 35, by = 1)
-y_vals <- seq(5, 60, by = 1)
+y_vals <- seq(5, 65, by = 1)
 grid <- expand.grid(x = x_vals, y = y_vals)
 
 # SET THIS AS DEFAULT VALUE, CORRECT IF NOT SO
