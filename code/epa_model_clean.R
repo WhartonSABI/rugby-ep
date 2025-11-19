@@ -220,7 +220,7 @@ ggsave("clean_plots/meter_line_marginal.png", meter_line_marginal,
        width = 10, height = 8, dpi = 300)
 
 # Seconds remaining in half
-ggplot(sampled_phase_data, aes(x = Seconds_Remaining_Half, y = points)) +
+seconds_remaining_marginal <- ggplot(sampled_phase_data, aes(x = Seconds_Remaining_Half, y = points)) +
   geom_point(alpha = 0.3, size = 2) +
   geom_smooth(method = "loess", se = TRUE) +
   labs(
@@ -230,8 +230,11 @@ ggplot(sampled_phase_data, aes(x = Seconds_Remaining_Half, y = points)) +
   ) +
   theme_minimal(base_size = 14)
 
+ggsave("clean_plots/seconds_remaining_marginal.png", seconds_remaining_marginal,
+       width = 10, height = 8, dpi = 300)
+
 # Home lineout possession
-ggplot(sampled_phase_data, aes(x = factor(Home_Attack), y = points)) +
+home_marginal <- ggplot(sampled_phase_data, aes(x = factor(Home_Attack), y = points)) +
   geom_boxplot(fill = "grey80") +
   labs(
     title = "Points by Home Attack",
@@ -240,8 +243,11 @@ ggplot(sampled_phase_data, aes(x = factor(Home_Attack), y = points)) +
   ) +
   theme_minimal(base_size = 14)
 
+ggsave("clean_plots/home_marginal.png", home_marginal,
+       width = 10, height = 8, dpi = 300)
+
 # Win Percent Differential
-ggplot(sampled_phase_data, aes(x = WinPct_Diff, y = points)) +
+win_per_marginal <- ggplot(sampled_phase_data, aes(x = WinPct_Diff, y = points)) +
   geom_point(alpha = 0.3, size = 2) +
   geom_smooth(method = "loess", se = TRUE) +
   labs(
@@ -251,8 +257,11 @@ ggplot(sampled_phase_data, aes(x = WinPct_Diff, y = points)) +
   ) +
   theme_minimal(base_size = 14)
 
+ggsave("clean_plots/win_per_marginal.png", win_per_marginal,
+       width = 10, height = 8, dpi = 300)
+
 # Card Differential
-ggplot(sampled_phase_data, aes(x = factor(Card_Diff), y = points)) +
+card_dif_marginal <- ggplot(sampled_phase_data, aes(x = factor(Card_Diff), y = points)) +
   geom_boxplot(fill = "lightblue") +
   labs(
     title = "Points by Card Differential",
@@ -260,6 +269,9 @@ ggplot(sampled_phase_data, aes(x = factor(Card_Diff), y = points)) +
     y = "Points"
   ) +
   theme_minimal(base_size = 14)
+
+ggsave("clean_plots/card_dif_marginal.png", card_dif_marginal,
+       width = 10, height = 8, dpi = 300)
 
 
 regression <- lm(points ~ meter_line + Home_Attack + Card_Diff + WinPct_Diff,
@@ -287,7 +299,7 @@ plot_data <- data.frame(
   expected_points = expected_points
 )
 
-ggplot(plot_data, aes(x = meter_line, y = expected_points)) +
+ep_by_meter_line <- ggplot(plot_data, aes(x = meter_line, y = expected_points)) +
   geom_line(size = 1.2, color = "blue") +
   labs(
     title = "Expected Points by Meter Line",
@@ -296,6 +308,9 @@ ggplot(plot_data, aes(x = meter_line, y = expected_points)) +
     y = "Expected Points"
   ) +
   theme_minimal(base_size = 14)
+
+ggsave("clean_plots/ep_by_meter_line.png", ep_by_meter_line,
+       width = 10, height = 8, dpi = 300)
 
 ############################
 ### Kick Expected Points ###
@@ -345,7 +360,7 @@ grid <- grid %>%
 
 thresholds <- c(0.8, 0.6, 0.4, 0.2)
 
-ggplot(grid, aes(x = x, y = y, fill = prob)) +
+kick_prob_plot <- ggplot(grid, aes(x = x, y = y, fill = prob)) +
   geom_tile() +
   geom_contour(aes(z = prob),
                breaks = thresholds,
@@ -361,9 +376,12 @@ ggplot(grid, aes(x = x, y = y, fill = prob)) +
   ) +
   theme_minimal()
 
+ggsave("clean_plots/kick_prob_plot.png", kick_prob_plot,
+       width = 10, height = 8, dpi = 300)
+
 # Expected Points of a Penalty Kick
 
-ggplot(grid, aes(x = x, y = y, fill = expected_points)) +
+kick_ep_plot <- ggplot(grid, aes(x = x, y = y, fill = expected_points)) +
   geom_tile() +
   scale_fill_viridis_c(option = "magma", name = "Expected Prob") +
   coord_fixed() +
@@ -373,6 +391,10 @@ ggplot(grid, aes(x = x, y = y, fill = expected_points)) +
     y = "Distance from goal line (m)"
   ) +
   theme_minimal()
+
+ggsave("clean_plots/kick_ep_plot.png", kick_ep_plot,
+       width = 10, height = 8, dpi = 300)
+
 
 #################################
 ### Comparing Expected Points ###
@@ -394,7 +416,7 @@ grid <- grid %>%
 # Assumes all coeffs = 0 expect meter_line, home, and intercept
 # Also assumes no advancing of lineout from penalty location
 
-ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
+no_shift_plot <- ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
   geom_raster(interpolate = TRUE) +
   scale_fill_gradient2(
     low = "#457B9D",
@@ -411,6 +433,9 @@ ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
     fill = "Point Diff"
   ) +
   theme_minimal(base_size = 14)
+
+ggsave("clean_plots/no_shift_plot.png", no_shift_plot,
+       width = 10, height = 8, dpi = 300)
 
 # Shifting location of lineout forward
 
@@ -441,7 +466,7 @@ plots <- lapply(y_shifts, function(shift) {
       point_diff_shifted = lineout_ep_shifted - kick_ep
     )
   
-  ggplot(grid_shifted, aes(x = x, y = y, fill = point_diff_shifted)) +
+  p <- ggplot(grid_shifted, aes(x = x, y = y, fill = point_diff_shifted)) +
     geom_raster(interpolate = TRUE) +
     scale_fill_gradient2(
       low = "#457B9D",
@@ -457,6 +482,11 @@ plots <- lapply(y_shifts, function(shift) {
       y = "Distance from goal line (m)"
     ) +
     theme_minimal(base_size = 14)
+  
+  filename <- paste0("clean_plots/kick_vs_lineout_shift_", abs(shift), "m.png")
+  ggsave(filename, p, width = 12, height = 10, dpi = 300)
+  
+  p
 })
 
 ######################################
@@ -540,6 +570,8 @@ delta_plot <- ggplot(shift_results_long,
     color = "Option"
   )
 
+ggsave("clean_plots/delta_plot.png", delta_plot,
+       width = 10, height = 8, dpi = 300)
 
 #########################
 ### Scenario Analysis ###
@@ -575,7 +607,7 @@ grid_scenario <- grid_scenario %>%
   )
 
 # Home team
-ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
+home_points_diff <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
     low = "#457B9D",
@@ -591,6 +623,9 @@ ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
     y = "Distance from goal line (m)"
   ) +
   theme_minimal(base_size = 14)
+
+ggsave("clean_plots/home_points_diff.png", home_points_diff,
+       width = 10, height = 8, dpi = 300)
 
 expected_points <- intercept + coef_meter * meter_seq + 
   coef_home * 0 + coef_card * 0 + coef_win_per * 0
@@ -616,7 +651,7 @@ grid_scenario <- grid_scenario %>%
   )
 
 # Away team
-ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
+away_points_diff <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
     low = "#457B9D",
@@ -632,6 +667,9 @@ ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
     y = "Distance from goal line (m)"
   ) +
   theme_minimal(base_size = 14)
+
+ggsave("clean_plots/away_points_diff.png", away_points_diff,
+       width = 10, height = 8, dpi = 300)
 
 
 # Scenario 2 - Yellow Cards
@@ -660,7 +698,7 @@ grid_scenario <- grid_scenario %>%
   )
 
 # Opponent has yellow card
-ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
+opponent_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
     low = "#457B9D",
@@ -676,6 +714,9 @@ ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
     y = "Distance from goal line (m)"
   ) +
   theme_minimal(base_size = 14)
+
+ggsave("clean_plots/opponent_yellow.png", opponent_yellow,
+       width = 10, height = 8, dpi = 300)
 
 
 expected_points <- intercept + coef_meter * meter_seq + 
@@ -702,7 +743,7 @@ grid_scenario <- grid_scenario %>%
   )
 
 # No difference in yellow cards
-ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
+no_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
     low = "#457B9D",
@@ -718,6 +759,10 @@ ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
     y = "Distance from goal line (m)"
   ) +
   theme_minimal(base_size = 14)
+
+ggsave("clean_plots/no_yellow.png", no_yellow,
+       width = 10, height = 8, dpi = 300)
+
 
 
 expected_points <- intercept + coef_meter * meter_seq + 
@@ -744,7 +789,7 @@ grid_scenario <- grid_scenario %>%
   )
 
 # You have a yellow card
-ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
+own_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
     low = "#457B9D",
@@ -760,6 +805,9 @@ ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
     y = "Distance from goal line (m)"
   ) +
   theme_minimal(base_size = 14)
+
+ggsave("clean_plots/own_yellow.png", own_yellow,
+       width = 10, height = 8, dpi = 300)
 
 
 # Scenario 3 - Team Quality
@@ -788,7 +836,7 @@ grid_scenario <- grid_scenario %>%
   )
 
 # Bad team
-ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
+bad_team <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
     low = "#457B9D",
@@ -804,6 +852,9 @@ ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
     y = "Distance from goal line (m)"
   ) +
   theme_minimal(base_size = 14)
+
+ggsave("clean_plots/bad_team.png", bad_team,
+       width = 10, height = 8, dpi = 300)
 
 
 
@@ -831,7 +882,7 @@ grid_scenario <- grid_scenario %>%
   )
 
 # Good team
-ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
+good_team <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
     low = "#457B9D",
@@ -847,5 +898,8 @@ ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
     y = "Distance from goal line (m)"
   ) +
   theme_minimal(base_size = 14)
+
+ggsave("clean_plots/good_team.png", good_team,
+       width = 10, height = 8, dpi = 300)
 
 
