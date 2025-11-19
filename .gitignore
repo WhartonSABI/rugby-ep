@@ -5,6 +5,9 @@
 # for literature
 papers
 
+# finder tracker
+.DS_Store
+
 #########
 ### R ###
 #########
