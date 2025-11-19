@@ -191,7 +191,7 @@ meter_line_marginal <- ggplot(sampled_phase_data, aes(x = meter_line, y = points
   ) +
   theme_minimal(base_size = 14)
 
-ggsave("clean_plots/meter_line_marginal.png", meter_line_marginal,
+ggsave("plots/meter_line_marginal.png", meter_line_marginal,
        width = 10, height = 8, dpi = 300)
 
 # Seconds remaining in half
@@ -205,7 +205,7 @@ seconds_remaining_marginal <- ggplot(sampled_phase_data, aes(x = Seconds_Remaini
   ) +
   theme_minimal(base_size = 14)
 
-ggsave("clean_plots/seconds_remaining_marginal.png", seconds_remaining_marginal,
+ggsave("plots/seconds_remaining_marginal.png", seconds_remaining_marginal,
        width = 10, height = 8, dpi = 300)
 
 # Home lineout possession
@@ -218,7 +218,7 @@ home_marginal <- ggplot(sampled_phase_data, aes(x = factor(Home_Attack), y = poi
   ) +
   theme_minimal(base_size = 14)
 
-ggsave("clean_plots/home_marginal.png", home_marginal,
+ggsave("plots/home_marginal.png", home_marginal,
        width = 10, height = 8, dpi = 300)
 
 # Win Percent Differential
@@ -232,7 +232,7 @@ win_per_marginal <- ggplot(sampled_phase_data, aes(x = WinPct_Diff, y = points))
   ) +
   theme_minimal(base_size = 14)
 
-ggsave("clean_plots/win_per_marginal.png", win_per_marginal,
+ggsave("plots/win_per_marginal.png", win_per_marginal,
        width = 10, height = 8, dpi = 300)
 
 # Card Differential
@@ -245,7 +245,7 @@ card_dif_marginal <- ggplot(sampled_phase_data, aes(x = factor(Card_Diff), y = p
   ) +
   theme_minimal(base_size = 14)
 
-ggsave("clean_plots/card_dif_marginal.png", card_dif_marginal,
+ggsave("plots/card_dif_marginal.png", card_dif_marginal,
        width = 10, height = 8, dpi = 300)
 
 
@@ -284,7 +284,7 @@ ep_by_meter_line <- ggplot(plot_data, aes(x = meter_line, y = expected_points)) 
   ) +
   theme_minimal(base_size = 14)
 
-ggsave("clean_plots/ep_by_meter_line.png", ep_by_meter_line,
+ggsave("plots/ep_by_meter_line.png", ep_by_meter_line,
        width = 10, height = 8, dpi = 300)
 
 ###############################
@@ -293,7 +293,7 @@ ggsave("clean_plots/ep_by_meter_line.png", ep_by_meter_line,
 
 # GAM Model for Kick Percentage
 
-saved_gam <- readRDS("gam_model.rds")
+saved_gam <- readRDS("data/gam_model.rds")
 
 exp_points_on_miss <- 0.74
 exp_points_on_success <- 3
@@ -351,7 +351,7 @@ kick_prob_plot <- ggplot(grid, aes(x = x, y = y, fill = prob)) +
   ) +
   theme_minimal()
 
-ggsave("clean_plots/kick_prob_plot.png", kick_prob_plot,
+ggsave("plots/kick_prob_plot.png", kick_prob_plot,
        width = 10, height = 8, dpi = 300)
 
 # Expected Points of a Penalty Kick
@@ -367,7 +367,7 @@ kick_ep_plot <- ggplot(grid, aes(x = x, y = y, fill = expected_points)) +
   ) +
   theme_minimal()
 
-ggsave("clean_plots/kick_ep_plot.png", kick_ep_plot,
+ggsave("plots/kick_ep_plot.png", kick_ep_plot,
        width = 10, height = 8, dpi = 300)
 
 
@@ -409,7 +409,7 @@ no_shift_plot <- ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
   ) +
   theme_minimal(base_size = 14)
 
-ggsave("clean_plots/no_shift_plot.png", no_shift_plot,
+ggsave("plots/no_shift_plot.png", no_shift_plot,
        width = 10, height = 8, dpi = 300)
 
 # Shifting location of lineout forward
@@ -458,7 +458,7 @@ plots <- lapply(y_shifts, function(shift) {
     ) +
     theme_minimal(base_size = 14)
   
-  filename <- paste0("clean_plots/kick_vs_lineout_shift_", abs(shift), "m.png")
+  filename <- paste0("plots/kick_vs_lineout_shift_", abs(shift), "m.png")
   ggsave(filename, p, width = 12, height = 10, dpi = 300)
   
   p
@@ -545,7 +545,7 @@ delta_plot <- ggplot(shift_results_long,
     color = "Option"
   )
 
-ggsave("clean_plots/delta_plot.png", delta_plot,
+ggsave("plots/delta_plot.png", delta_plot,
        width = 10, height = 8, dpi = 300)
 
 ##########################
@@ -599,7 +599,7 @@ home_points_diff <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) 
   ) +
   theme_minimal(base_size = 14)
 
-ggsave("clean_plots/home_points_diff.png", home_points_diff,
+ggsave("plots/home_points_diff.png", home_points_diff,
        width = 10, height = 8, dpi = 300)
 
 expected_points <- intercept + coef_meter * meter_seq + 
@@ -643,7 +643,7 @@ away_points_diff <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) 
   ) +
   theme_minimal(base_size = 14)
 
-ggsave("clean_plots/away_points_diff.png", away_points_diff,
+ggsave("plots/away_points_diff.png", away_points_diff,
        width = 10, height = 8, dpi = 300)
 
 
@@ -690,7 +690,7 @@ opponent_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   ) +
   theme_minimal(base_size = 14)
 
-ggsave("clean_plots/opponent_yellow.png", opponent_yellow,
+ggsave("plots/opponent_yellow.png", opponent_yellow,
        width = 10, height = 8, dpi = 300)
 
 
@@ -735,7 +735,7 @@ no_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   ) +
   theme_minimal(base_size = 14)
 
-ggsave("clean_plots/no_yellow.png", no_yellow,
+ggsave("plots/no_yellow.png", no_yellow,
        width = 10, height = 8, dpi = 300)
 
 
@@ -781,7 +781,7 @@ own_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   ) +
   theme_minimal(base_size = 14)
 
-ggsave("clean_plots/own_yellow.png", own_yellow,
+ggsave("plots/own_yellow.png", own_yellow,
        width = 10, height = 8, dpi = 300)
 
 
@@ -828,7 +828,7 @@ bad_team <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   ) +
   theme_minimal(base_size = 14)
 
-ggsave("clean_plots/bad_team.png", bad_team,
+ggsave("plots/bad_team.png", bad_team,
        width = 10, height = 8, dpi = 300)
 
 
@@ -874,7 +874,7 @@ good_team <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   ) +
   theme_minimal(base_size = 14)
 
-ggsave("clean_plots/good_team.png", good_team,
+ggsave("plots/good_team.png", good_team,
        width = 10, height = 8, dpi = 300)
 
 
