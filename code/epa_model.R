@@ -186,7 +186,7 @@ meter_line_marginal <- ggplot(sampled_phase_data, aes(x = meter_line, y = points
   geom_smooth(method = "loess", se = TRUE) +
   labs(
     title = "Points vs Meter Line (Marginal Relationship)",
-    x = "Meter Line",
+    x = "Meters from Try Line",
     y = "Points"
   ) +
   theme_minimal(base_size = 14)
@@ -240,7 +240,7 @@ card_dif_marginal <- ggplot(sampled_phase_data, aes(x = factor(Card_Diff), y = p
   geom_boxplot(fill = "lightblue") +
   labs(
     title = "Points by Card Differential",
-    x = "Card Differential (Own - Opponent)",
+    x = "Card Differential (Opponent - Own)",
     y = "Points"
   ) +
   theme_minimal(base_size = 14)
@@ -279,7 +279,7 @@ ep_by_meter_line <- ggplot(plot_data, aes(x = meter_line, y = expected_points)) 
   labs(
     title = "Expected Points by Meter Line",
     subtitle = "Assuming Home_Attack = 1 and Card_Diff = 0",
-    x = "Meter Line",
+    x = "Meters from Try Line",
     y = "Expected Points"
   ) +
   theme_minimal(base_size = 14)
@@ -394,9 +394,9 @@ grid <- grid %>%
 no_shift_plot <- ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
   geom_raster(interpolate = TRUE) +
   scale_fill_gradient2(
-    low = "#457B9D",
+    low = "#E76F51",
     mid = "white",
-    high = "#E76F51",
+    high = "#457B9D",
     midpoint = 0,
     name = "Lineout - Kick"
   ) +
@@ -444,9 +444,9 @@ plots <- lapply(y_shifts, function(shift) {
   p <- ggplot(grid_shifted, aes(x = x, y = y, fill = point_diff_shifted)) +
     geom_raster(interpolate = TRUE) +
     scale_fill_gradient2(
-      low = "#457B9D",
-      mid = "white",      
-      high = "#E76F51",
+      low = "#E76F51",
+      mid = "white",
+      high = "#457B9D",
       midpoint = 0,
       name = "Lineout - Kick"
     ) +
@@ -585,9 +585,9 @@ grid_scenario <- grid_scenario %>%
 home_points_diff <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
-    low = "#457B9D",
+    low = "#E76F51",
     mid = "white",
-    high = "#E76F51",
+    high = "#457B9D",
     midpoint = 0,
     name = "Lineout - Kick"
   ) +
@@ -629,9 +629,9 @@ grid_scenario <- grid_scenario %>%
 away_points_diff <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
-    low = "#457B9D",
+    low = "#E76F51",
     mid = "white",
-    high = "#E76F51",
+    high = "#457B9D",
     midpoint = 0,
     name = "Lineout - Kick"
   ) +
@@ -676,9 +676,9 @@ grid_scenario <- grid_scenario %>%
 opponent_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
-    low = "#457B9D",
+    low = "#E76F51",
     mid = "white",
-    high = "#E76F51",
+    high = "#457B9D",
     midpoint = 0,
     name = "Lineout - Kick"
   ) +
@@ -721,9 +721,9 @@ grid_scenario <- grid_scenario %>%
 no_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
-    low = "#457B9D",
+    low = "#E76F51",
     mid = "white",
-    high = "#E76F51",
+    high = "#457B9D",
     midpoint = 0,
     name = "Lineout - Kick"
   ) +
@@ -767,9 +767,9 @@ grid_scenario <- grid_scenario %>%
 own_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
-    low = "#457B9D",
+    low = "#E76F51",
     mid = "white",
-    high = "#E76F51",
+    high = "#457B9D",
     midpoint = 0,
     name = "Lineout - Kick"
   ) +
@@ -814,9 +814,9 @@ grid_scenario <- grid_scenario %>%
 bad_team <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
-    low = "#457B9D",
+    low = "#E76F51",
     mid = "white",
-    high = "#E76F51",
+    high = "#457B9D",
     midpoint = 0,
     name = "Lineout - Kick"
   ) +
@@ -860,9 +860,9 @@ grid_scenario <- grid_scenario %>%
 good_team <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
-    low = "#457B9D",
+    low = "#E76F51",
     mid = "white",
-    high = "#E76F51",
+    high = "#457B9D",
     midpoint = 0,
     name = "Lineout - Kick"
   ) +
