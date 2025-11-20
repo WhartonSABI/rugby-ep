@@ -282,7 +282,7 @@ ggsave("plots/ep_by_meter_line.png", ep_by_meter_line,
 
 saved_gam <- readRDS("data/gam_model.rds")
 
-exp_points_on_miss <- 0.74
+exp_points_on_miss <- 0.76
 exp_points_on_success <- 3
 
 # Pitch grid values
@@ -345,7 +345,7 @@ ggsave("plots/kick_prob_plot.png", kick_prob_plot,
 
 kick_ep_plot <- ggplot(grid, aes(x = x, y = y, fill = expected_points)) +
   geom_tile() +
-  scale_fill_viridis_c(option = "magma", name = "Expected Prob") +
+  scale_fill_viridis_c(option = "magma", name = "Expected Points") +
   coord_fixed() +
   labs(
     title = "Expected Points of a Penalty Kick",
