@@ -647,10 +647,10 @@ ggsave("plots/away_points_diff.png", away_points_diff,
        width = 10, height = 8, dpi = 300)
 
 
-# Scenario 2 - Yellow Cards
+# Scenario 2 - Yellow Cards (Away Teams)
 
 expected_points <- intercept + coef_meter * meter_seq + 
-  coef_home * 0 + coef_card * 1 + coef_win_per * 0
+  coef_home * 0 + coef_card * 1 + coef_win_per * 0  # Away team (coef_home * 0)
 
 plot_data <- data.frame(
   meter_line = meter_seq,
@@ -695,7 +695,7 @@ ggsave("plots/opponent_yellow.png", opponent_yellow,
 
 
 expected_points <- intercept + coef_meter * meter_seq + 
-  coef_home * 0 + coef_card * 0 + coef_win_per * 0
+  coef_home * 0 + coef_card * 0 + coef_win_per * 0  # Away team (coef_home * 0)
 
 plot_data <- data.frame(
   meter_line = meter_seq,
@@ -741,7 +741,7 @@ ggsave("plots/no_yellow.png", no_yellow,
 
 
 expected_points <- intercept + coef_meter * meter_seq + 
-  coef_home * 0 + coef_card * -1 + coef_win_per * 0
+  coef_home * 0 + coef_card * -1 + coef_win_per * 0  # Away team (coef_home * 0)
 
 plot_data <- data.frame(
   meter_line = meter_seq,
@@ -785,10 +785,10 @@ ggsave("plots/own_yellow.png", own_yellow,
        width = 10, height = 8, dpi = 300)
 
 
-# Scenario 3 - Team Quality
+# Scenario 3 - Team Quality (Away Teams)
 
 expected_points <- intercept + coef_meter * meter_seq + 
-  coef_home * 0 + coef_card * 0 + coef_win_per * -0.25
+  coef_home * 0 + coef_card * 0 + coef_win_per * -0.25  # Away team (coef_home * 0)
 
 plot_data <- data.frame(
   meter_line = meter_seq,
@@ -834,7 +834,7 @@ ggsave("plots/bad_team.png", bad_team,
 
 
 expected_points <- intercept + coef_meter * meter_seq + 
-  coef_home * 0 + coef_card * 0 + coef_win_per * 0.25
+  coef_home * 0 + coef_card * 0 + coef_win_per * 0.25  # Away team (coef_home * 0)
 
 plot_data <- data.frame(
   meter_line = meter_seq,
