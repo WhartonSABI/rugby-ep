@@ -447,8 +447,6 @@ plots <- lapply(y_shifts, function(shift) {
   
   filename <- paste0("plots/kick_vs_lineout_shift_", abs(shift), "m.png")
   ggsave(filename, p, width = 12, height = 10, dpi = 300)
-  
-  p
 })
 
 ######################
