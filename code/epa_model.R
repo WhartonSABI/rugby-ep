@@ -453,8 +453,8 @@ plots <- lapply(y_shifts, function(shift) {
 ### LINEOUT SHIFTS ###
 ######################
 
-marker_x <- 19
-marker_y <- 40
+marker_x <- 20
+marker_y <- 30
 
 y_shifts <- seq(0, -30, by = -1)
 
@@ -588,6 +588,38 @@ baseline_points_diff <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_dif
 ggsave("plots/baseline_points_diff.png", baseline_points_diff,
        width = 10, height = 8, dpi = 300)
 
+# Baseline scenario with marker
+
+marker_x <- 20
+marker_y <- 30
+
+baseline_with_marker <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
+  geom_tile() +
+  geom_point(aes(x = marker_x, y = marker_y), shape = 4, color = "black", size = 4, stroke = 1.5)+
+  scale_fill_gradient2(
+    low = "#E76F51",
+    mid = "white",
+    high = "#457B9D",
+    midpoint = 0,
+    name = "Lineout - Kick"
+  ) +
+  coord_fixed() +
+  labs(
+    title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
+    subtitle = "Baseline: Card_Diff = 0, WinPct_Diff = 0",
+    x = "Lateral position (m)",
+    y = "Distance from goal line (m)"
+  ) +
+  theme_minimal(base_size = 14)
+
+ggsave("plots/baseline_with_marker.png", baseline_with_marker,
+       width = 10, height = 8, dpi = 300)
+
+marker_values <- grid_scenario %>%
+  filter(x == marker_x, y == marker_y) %>%
+  select(point_diff, kick_ep, lineout_ep_shifted)
+
+marker_values
 
 # Scenario 2 - Yellow Cards
 
