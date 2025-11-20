@@ -208,19 +208,6 @@ seconds_remaining_marginal <- ggplot(sampled_phase_data, aes(x = Seconds_Remaini
 ggsave("plots/seconds_remaining_marginal.png", seconds_remaining_marginal,
        width = 10, height = 8, dpi = 300)
 
-# Home lineout possession
-home_marginal <- ggplot(sampled_phase_data, aes(x = factor(Home_Attack), y = points)) +
-  geom_boxplot(fill = "grey80") +
-  labs(
-    title = "Points by Home Attack",
-    x = "Home Attack (0 = Away Attack, 1 = Home Attack)",
-    y = "Points"
-  ) +
-  theme_minimal(base_size = 14)
-
-ggsave("plots/home_marginal.png", home_marginal,
-       width = 10, height = 8, dpi = 300)
-
 # Win Percent Differential
 win_per_marginal <- ggplot(sampled_phase_data, aes(x = WinPct_Diff, y = points)) +
   geom_point(alpha = 0.3, size = 2) +
@@ -249,7 +236,7 @@ ggsave("plots/card_dif_marginal.png", card_dif_marginal,
        width = 10, height = 8, dpi = 300)
 
 
-regression <- lm(points ~ meter_line + Home_Attack + Card_Diff + WinPct_Diff,
+regression <- lm(points ~ meter_line + Card_Diff + WinPct_Diff,
                  data = sampled_phase_data)
 
 summary(regression)
@@ -257,17 +244,17 @@ summary(regression)
 
 # Plotting EP of Lineout
 
-# Regression coefficients
-intercept <- 2.72591
-coef_meter <- -0.05784
-coef_home <- 1.00477
-coef_card <- 0.84649
-coef_win_per <- 0.77876
+# Regression coefficients (will be updated after running regression)
+regression_summary <- summary(regression)
+intercept <- regression_summary$coefficients["(Intercept)", "Estimate"]
+coef_meter <- regression_summary$coefficients["meter_line", "Estimate"]
+coef_card <- regression_summary$coefficients["Card_Diff", "Estimate"]
+coef_win_per <- regression_summary$coefficients["WinPct_Diff", "Estimate"]
 
 meter_seq <- seq(0, 100, by = 1)
 
 expected_points <- intercept + coef_meter * meter_seq + 
-  coef_home * 1 + coef_card * 0 + coef_win_per * 0
+  coef_card * 0 + coef_win_per * 0
 
 plot_data <- data.frame(
   meter_line = meter_seq,
@@ -278,7 +265,7 @@ ep_by_meter_line <- ggplot(plot_data, aes(x = meter_line, y = expected_points)) 
   geom_line(size = 1.2, color = "blue") +
   labs(
     title = "Expected Points by Meter Line",
-    subtitle = "Assuming Home_Attack = 1 and Card_Diff = 0",
+    subtitle = "Assuming Card_Diff = 0 and WinPct_Diff = 0",
     x = "Meters from Try Line",
     y = "Expected Points"
   ) +
@@ -552,14 +539,14 @@ ggsave("plots/delta_plot.png", delta_plot,
 ### SITUATION ANALYSIS ###
 ##########################
 
-# Scenario 1 - Home vs Away
+# Scenario 1 - No Card or Win Percentage Difference
 
 y_shift <- -20
 
 meter_seq <- seq(0, 100, by = 1)
 
 expected_points <- intercept + coef_meter * meter_seq + 
-  coef_home * 1 + coef_card * 0 + coef_win_per * 0
+  coef_card * 0 + coef_win_per * 0
 
 plot_data <- data.frame(
   meter_line = meter_seq,
@@ -581,8 +568,8 @@ grid_scenario <- grid_scenario %>%
     point_diff = lineout_ep_shifted - kick_ep
   )
 
-# Home team
-home_points_diff <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
+# Baseline scenario
+baseline_points_diff <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
     low = "#E76F51",
@@ -594,63 +581,20 @@ home_points_diff <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) 
   coord_fixed() +
   labs(
     title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
+    subtitle = "Baseline: Card_Diff = 0, WinPct_Diff = 0",
     x = "Lateral position (m)",
     y = "Distance from goal line (m)"
   ) +
   theme_minimal(base_size = 14)
 
-ggsave("plots/home_points_diff.png", home_points_diff,
-       width = 10, height = 8, dpi = 300)
-
-expected_points <- intercept + coef_meter * meter_seq + 
-  coef_home * 0 + coef_card * 0 + coef_win_per * 0
-
-plot_data <- data.frame(
-  meter_line = meter_seq,
-  expected_points = expected_points
-)
-
-scenario_max_lineout_ep <- max(plot_data$expected_points)
-
-grid_scenario <- grid %>%
-  select(-lineout_ep) %>%
-  left_join(plot_data, by = c("y" = "meter_line")) %>%
-  rename(lineout_ep = expected_points)
-
-grid_scenario <- grid_scenario %>%
-  mutate(
-    lineout_ep_shifted = pmin(lineout_ep, max(lineout_ep)),
-    lineout_ep_shifted = approx(y, lineout_ep, xout = y + y_shift, rule = 2)$y,
-    
-    point_diff = lineout_ep_shifted - kick_ep
-  )
-
-# Away team
-away_points_diff <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
-  geom_tile() +
-  scale_fill_gradient2(
-    low = "#E76F51",
-    mid = "white",
-    high = "#457B9D",
-    midpoint = 0,
-    name = "Lineout - Kick"
-  ) +
-  coord_fixed() +
-  labs(
-    title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
-    x = "Lateral position (m)",
-    y = "Distance from goal line (m)"
-  ) +
-  theme_minimal(base_size = 14)
-
-ggsave("plots/away_points_diff.png", away_points_diff,
+ggsave("plots/baseline_points_diff.png", baseline_points_diff,
        width = 10, height = 8, dpi = 300)
 
 
-# Scenario 2 - Yellow Cards (Away Teams)
+# Scenario 2 - Yellow Cards
 
 expected_points <- intercept + coef_meter * meter_seq + 
-  coef_home * 0 + coef_card * 1 + coef_win_per * 0  # Away team (coef_home * 0)
+  coef_card * 1 + coef_win_per * 0
 
 plot_data <- data.frame(
   meter_line = meter_seq,
@@ -695,7 +639,7 @@ ggsave("plots/opponent_yellow.png", opponent_yellow,
 
 
 expected_points <- intercept + coef_meter * meter_seq + 
-  coef_home * 0 + coef_card * 0 + coef_win_per * 0  # Away team (coef_home * 0)
+  coef_card * 0 + coef_win_per * 0
 
 plot_data <- data.frame(
   meter_line = meter_seq,
@@ -741,7 +685,7 @@ ggsave("plots/no_yellow.png", no_yellow,
 
 
 expected_points <- intercept + coef_meter * meter_seq + 
-  coef_home * 0 + coef_card * -1 + coef_win_per * 0  # Away team (coef_home * 0)
+  coef_card * -1 + coef_win_per * 0
 
 plot_data <- data.frame(
   meter_line = meter_seq,
@@ -785,10 +729,10 @@ ggsave("plots/own_yellow.png", own_yellow,
        width = 10, height = 8, dpi = 300)
 
 
-# Scenario 3 - Team Quality (Away Teams)
+# Scenario 3 - Team Quality
 
 expected_points <- intercept + coef_meter * meter_seq + 
-  coef_home * 0 + coef_card * 0 + coef_win_per * -0.25  # Away team (coef_home * 0)
+  coef_card * 0 + coef_win_per * -0.25
 
 plot_data <- data.frame(
   meter_line = meter_seq,
@@ -834,7 +778,7 @@ ggsave("plots/bad_team.png", bad_team,
 
 
 expected_points <- intercept + coef_meter * meter_seq + 
-  coef_home * 0 + coef_card * 0 + coef_win_per * 0.25  # Away team (coef_home * 0)
+  coef_card * 0 + coef_win_per * 0.25
 
 plot_data <- data.frame(
   meter_line = meter_seq,
