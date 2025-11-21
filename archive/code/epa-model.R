@@ -640,21 +640,24 @@ table(all_restarts$Location)
 # Need to Remove All Restarts After Tries and Penalties
 
 restarts_not_after_score <- phase_data %>%
+  group_by(Home, Away) %>%   # ← ensures lags only look within the same match
   mutate(
     prev_ID = lag(ID),
     prev_Points = lag(Points_Difference),
     prev_Play = lag(Play_Start),
-    prev_Team_In_Poss = lag(Team_In_Poss)
+    prev_Team_In_Poss = lag(Team_In_Poss),
+    prev_outcome = lag(Outcome),
+    prev_seconds_remaining = lag(Seconds_Remaining)
   ) %>%
+  ungroup() %>%
   filter(
     Phase == 1,
     Play_Start == "Restart Kick",
     !is.na(prev_ID),
-    abs(Points_Difference - prev_Points) == 0,
-    Seconds_Remaining < 4795,
+    near(Points_Difference, prev_Points),   # safer than abs() == 0
+    Seconds_Remaining < 4790,
     !between(Seconds_Remaining, 2390, 2400)
   )
-
 
 
 head(restarts_not_after_score)
