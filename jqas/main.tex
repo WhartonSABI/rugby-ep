@@ -1,0 +1,553 @@
+\documentclass[12pt]{article}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{setspace}
+\usepackage{enumitem}
+\usepackage{authblk}
+\usepackage{parskip}
+\usepackage{xcolor}
+\usepackage{siunitx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{natbib}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{subcaption}
+\geometry{margin=1in}
+\usepackage{chngcntr}
+\counterwithout{subfigure}{figure}
+
+% Custom colors and hyperlinks
+\definecolor{linkcolor}{RGB}{0, 90, 160}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=linkcolor,
+    urlcolor=linkcolor,
+    citecolor=linkcolor
+}
+
+\renewcommand{\P}{\mathbb{P}}
+
+\title{Kicking for Goal or Touch? An Expected Points Framework for Penalty Decisions in Rugby Union}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Following a penalty in rugby union, teams typically choose between attempting a shot at goal or kicking to touch to pursue a try. We develop an \emph{Expected Points} (EP) framework that quantifies the value of each option as a function of both field location and game context. Using phase-level data from the 2018/19 Premiership Rugby season (35{,}199 phases across 132 matches) and an angle--distance model of penalty kick success estimated from international records, we construct two surfaces: (i) the expected points of a possession beginning with a lineout, and (ii) the expected points of a kick at goal, taking into account the in-game consequences of made and missed kicks. We then compare these surfaces to produce decision maps that indicate where kicking for goal or kicking to touch maximizes expected return, and we analyze how the boundary shifts with game context and the expected meters gained to touch. Our results provide a unified, data-driven method for evaluating penalty decisions and can be tailored to team-specific kickers and lineout units. This study offers, to our knowledge, the first comprehensive EP-based assessment of penalty strategy in rugby union and outlines extensions to win-probability analysis and richer tracking data.
+\end{abstract}
+
+\section{Introduction}
+
+Rugby union presents a recurring strategic decision immediately after a penalty with four possible ways to restart play: going for an immediate three points via a kick at goal or pursuing a potential seven-point try by either a scrum, a tap-and-go (both at the point of the penalty) or a kick to touch where the attacking team restarts play with a lineout. Generally, except when right on the opposition goal-line, a lineout is perceived to be a superior choice than a tap-and-go or a scrum since the attacking team can safely advance the ball down the field, with the lineout occurring where the ball crosses the touch line following the kick. This means that, once within distance to make a penalty kick $\sim 60\text{m}$ from the opponent try line, the decision following a penalty is routinely between taking a lineout or kicking at goal.
+
+While the choice is often straightforward near the opposition's corner, given a certain point difference, or late in a match, many game states are ambiguous and governed by convention, perceived kicker ability, and the expected quality of a team’s lineout. In contrast, American football has long relied on \emph{Expected Points} (EP), \emph{Expected Points Added} (EPA), and \emph{win-probability} (WP) frameworks to guide fourth-down decision-making, translating field position and context into expected returns and actionable recommendations \citep{Romer2006,Burke2009,YurkoVenturaHorowitz2018}. In that setting, WP and EP estimators are typically built using statistical machine learning models (e.g., Random Forests and gradient boosting), as is done in \cite{LockNettleton2014} and \cite{Baldwin2021}.
+
+In rugby union, public research is only beginning to close this methodological gap, which can be largely attributed to a lack of publicly-available data. \cite{Martinez-Arastey2025} propose a transparent, phase-level modeling framework for calculating Expected Points on English Premiership data, highlighting the difficulty of reliably predicting minority outcomes (e.g., penalty kicks) and providing a reproducible benchmark rather than a deployable decision tool. Separately, public-facing analyses model goal-kicking success as a function of distance and lateral angle, offering practically-useful (albeit context-free) estimates \citep{Monpezat2023}. Building on these strands---and informed by lessons from the NFL literature on decision modeling---we directly evaluate the penalty decision.
+
+Our contribution is a decision-ready EP framework for the penalty decision. We construct two context-aware surfaces: (i) the expected points of a possession beginning with a lineout, estimated from phase-level data by field location, and (ii) the expected points of a kick at goal, which integrates a continuous angle--distance model of kick success together with the \emph{continuation value} of misses (e.g., 22\,m drop-outs and in-play recoveries) rather than treating misses as zero. Comparing these surfaces yields decision maps (zero-difference contours) indicating where each option maximizes expected return, and sensitivity analyses showing how the frontier shifts with kicker accuracy and expected meters gained to touch. We also make explicit the translation from penalty location to resulting lineout location and document assumptions required when bridging club-phase data and international kicking records. To our knowledge, this is the first comprehensive EP-based assessment of penalty strategy in rugby union that produces decision-ready artifacts; complementing prior methodological advances and isolated kicking models while laying the groundwork for future win-probability analysis in rugby. We proceed with an overview of the data, then continue with an outline of our methodology and results.
+
+\section{Data}
+
+\subsection{Phase-Level Data}
+
+Our primary dataset consists of phase-level event logs from the 2018/19 Premiership Rugby season compiled by \cite{Martinez-Arastey2025}, covering 132 matches and 35{,}199 phases of play. Each record describes the on-field state at the start of a phase: the initiating event type, a zonal field location and side, the current score differential, and the next score in points for or against the team in possession. We harmonize timestamps to ``seconds remaining in match'' so that time is strictly decreasing within a game and directly comparable across halves. 
+
+The unit of observation in the dataset is a \emph{phase}, defined as the period between subsequent rucks. The phase count resets following restarts (e.g., lineouts, scrums, kick-offs) or major infringements that halt play. A \emph{possession sequence} is an ordered set of phases by the same team without an opposition touch that changes possession. Unless otherwise stated, Expected Points estimates condition on the \emph{first} phase of a possession sequence (e.g., a lineout), because that is the decision-relevant entry state. Figure~\ref{fig:zones} summarizes the zonal discretization of the pitch used in the phase-level data.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\linewidth]{zones.png}
+    \caption{Field zones used in the phase-level dataset}
+    \label{fig:zones}
+\end{figure}
+
+\subsection{Phase-Level Data Processing}
+
+For the EP model, the unit of analysis is a possession that begins with a lineout. We therefore restrict the dataset to opening phases of play (i.e., observations with $\text{Phase} = 1$) whose initiating event is a lineout. Each such record represents a distinct possession entry state. We then construct several derived variables that encode field position, time, and game context:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Field position.} The original zone labels are converted into a continuous coordinate, \texttt{meter\_line}, which records the distance in meters from the team's own goal line at which the lineout originates.
+    \item \textbf{Time remaining.} Total seconds remaining in the match are transformed to \texttt{Sec\_Remain\_Half}, the seconds remaining in the current half, to better align with rugby's two-period structure.
+    \item \textbf{Score and card context.} \texttt{Points\_Difference} records the score differential (for the team in possession), while \texttt{Card\_Diff} tracks the net player advantage in terms of yellow or red cards.
+    \item \textbf{Team strength.} \texttt{WinPct\_Diff} is the running difference in win percentage between each team and its opponent at kickoff, computed from their prior matches.
+\end{itemize}
+
+To address potential double counting across consecutive possessions, we create a grouping identifier, \texttt{run\_id}, which indexes sequences of possessions that (i) begin with lineouts for the same team, (ii) share the same point differential at the start of the possession, and (iii) have the same eventual scoring outcome. Within each \texttt{run\_id} we also compute \texttt{n\_same}, the number of such consecutive possessions. The role of \texttt{run\_id} in the EP model is discussed in Section~\ref{sec:lineout}. The final structure of this reduced dataset is illustrated in Table~\ref{tab:reduced-data-structure}.
+
+\begin{table}[htbp]
+\centering
+\caption{Processed Rugby Union Phase-Level Dataset}
+\label{tab:reduced-data-structure}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{cccccccccccccc}
+\toprule
+\textbf{ID} & \textbf{Round} & \textbf{Home} & \textbf{Away} & \textbf{Phase} &
+\textbf{Team\_In\_Poss} & \textbf{Points\_Difference} & \textbf{Sec\_Remain\_Half} &
+\textbf{Card\_Diff} & \textbf{WinPct\_Diff} & \textbf{meter\_line} &
+\textbf{run\_id} & \textbf{n\_same} & \textbf{Points} \\
+\midrule
+8  & 1 & Harlequins & Sale & 1 & Home &  0 & 2302 & 0 & 0 & 31.0 & 1 & 1 &  3 \\
+10 & 1 & Harlequins & Sale & 1 & Home &  3 & 2166 & 0 & 0 & 45.0 & 2 & 1 & -3 \\
+14 & 1 & Harlequins & Sale & 1 & Away & -3 & 2103 & 0 & 0 & 13.5 & 3 & 2 &  3 \\
+17 & 1 & Harlequins & Sale & 1 & Away & -3 & 2043 & 0 & 0 & 31.0 & 3 & 2 &  3 \\
+53 & 1 & Harlequins & Sale & 1 & Home &  0 & 1313 & 0 & 0 & 55.0 & 4 & 1 &  7 \\
+56 & 1 & Harlequins & Sale & 1 & Away &  0 & 1188 & 0 & 0 & 86.5 & 5 & 1 & -7 \\
+67 & 1 & Harlequins & Sale & 1 & Away & -7 &  926 & 0 & 0 & 31.0 & 6 & 1 &  7 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\subsection{Kicking Data}
+
+Our kicking data come from the analysis in \cite{QuarrieHopkins2015}, which studied 582 international rugby matches played between 2002 and 2011. The resulting dataset consists of 3{,}802 penalties, aggregated into a 5\,m-by-5\,m grid over the pitch, with the observed proportion of successful kicks recorded for each grid square. These cell-level success rates serve as the raw input for our continuous angle--distance model of kick success. The structure of this dataset is included in Table~\ref{tab:kicking-data}.
+
+\begin{table}[htbp]
+\centering
+\caption{Structure of the penalty-kicking dataset. Each entry gives the observed proportion of successful penalties in that grid cell.}
+\label{tab:kicking-data}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccccccccccc}
+\toprule
+\textbf{Distance from Try Line (m)} & \multicolumn{14}{c}{\textbf{Distance from Left-Hand Touchline (m)}} \\
+\cmidrule(lr){2-15}
+ & 0--5 & 5--10 & 10--15 & 15--20 & 20--25 & 25--30 & 30--35 & 35--40 & 40--45 & 45--50 & 50--55 & 55--60 & 60--65 & 65--70 \\
+\midrule
+0--5   & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots \\
+5--10  & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots \\
+10--15 & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots & \dots \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+60--65 & \textbf{\dots} & \textbf{\dots} & \textbf{\dots} & \textbf{\dots} & \textbf{\dots} & \textbf{\dots} & \textbf{\dots} & \textbf{\dots} & \textbf{\dots} & \textbf{\dots} & \textbf{\dots} & \textbf{\dots} & \textbf{\dots} & \textbf{\dots} \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\section{Methodology}
+
+\subsection{Expected Points Framework}
+
+We evaluate the penalty decision---kicking at goal versus kicking to touch---by comparing the expected points (EP) of the two options at a given field location. Let $(x, y)$ denote the location of a penalty on the field, where $x$ is the distance in meters from the opposition try line and $y$ is the lateral distance from the center of the pitch. For a given assumed gain in territory from a kick to touch, denoted $d_{\text{touch}}$, we define the decision quantity as the difference in expected points, with positive values favoring a lineout:
+\[
+\Delta EP(x, y; d_{\text{touch}}) = EP_{\text{lineout}}(x_{\text{LO}}) - EP_{\text{kick}}(x, y),
+\]
+where $EP_{\text{kick}}(x, y)$ is the expected points from attempting a kick at goal from $(x, y)$, and $EP_{\text{lineout}}(x_{\text{LO}})$ is the expected points of the next scoring event from the ensuing lineout at location $x_{\text{LO}}$ on the sideline. Here $x_{\text{LO}}$ denotes the resulting lineout $x$-coordinate after kicking to touch; we make this translation rule explicit in Section~\ref{sec:adjustment}.
+
+The remainder of this section describes how we estimate $EP_{\text{lineout}}$ and $EP_{\text{kick}}$.
+
+\subsection{Expected Points of a Lineout} \label{sec:lineout}
+
+To value a lineout, we model the expected points of the \emph{next} scoring event using a multiple linear regression, based on possession sequences that begin with a lineout in a given field zone. Only the first phase of each possession is included, so that downstream phases from the same decision state are not double-counted. Formally,
+\[
+EP_{\text{lineout}} 
+  = \hat{\beta}_0 + \hat{\beta}_1 \cdot \text{meter\_line} 
+  + \hat{\beta}_2 \cdot \text{Card\_Diff} 
+  + \hat{\beta}_3 \cdot \text{WinPct\_Diff},
+\]
+where the $\hat{\beta}$ coefficients are estimated from the regression. This specification captures downstream contingencies observed in matches: losing one’s own lineout, turnovers in subsequent phases, or the opponent scoring following a turnover. The resulting quantity represents the \emph{expected next-score value} of having a lineout at that field position, given competition-level play and the current game context. In the decision maps below, we evaluate this surface at the \texttt{meter\_line} implied by each lineout location $x_{\text{LO}}$.
+
+\subsubsection{Dealing with Double Counting}
+
+Double counting can arise not only at the phase level (which we have already addressed by restricting to $\text{Phase} = 1$), but also across multiple consecutive possessions with effectively the same state and outcome. Table~\ref{tab:example-data} illustrates three successive possessions that all begin with a lineout for the same team, under the same score differential, and with the same eventual points outcome.
+
+\begin{table}[htbp]
+\centering
+\caption{Multiple possessions with the same outcome following consecutive lineouts}
+\label{tab:example-data}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{cccccccccccccc}
+\toprule
+\textbf{ID} & \textbf{Round} & \textbf{Home} & \textbf{Away} & \textbf{Phase} & \textbf{Team\_In\_Poss} & \textbf{Points\_Difference} & \textbf{Sec\_Remain\_Half} & \textbf{Card\_Diff} & \textbf{WinPct\_Diff} & \textbf{meter\_line} & \textbf{run\_id} & \textbf{n\_same} & \textbf{Points} \\
+\midrule
+19 & 1 & Harlequins & Sale & 1 & Home & 21 & 454 & 0 & 0 & 69.0 & 11 & 3 & 7 \\
+20 & 1 & Harlequins & Sale & 1 & Home & 21 & 378 & 0 & 0 & 13.5 & 11 & 3 & 7 \\
+21 & 1 & Harlequins & Sale & 1 & Home & 21 & 146 & 0 & 0 & 13.5 & 11 & 3 & 7 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+Consider a group of $n$ consecutive lineouts sharing the same \texttt{run\_id}. Treating all $n$ as independent observations would over-represent that specific game situation in the regression. To prevent this, we randomly retain a single representative observation from each group and discard the remaining $n-1$. Let $Y_1, \dots, Y_n$ denote the $n$ lineouts in such a group. The retained observation $\tilde{Y}$ is drawn uniformly:
+\[
+\tilde{Y} \sim \text{Uniform}\big(\{Y_1, \dots, Y_n\}\big).
+\]
+
+This procedure ensures that each \texttt{run\_id} contributes at most one observation to the lineout EP model, mitigating bias from repeated, structurally identical possessions. Our approach is conceptually similar to the cluster-level subsampling used by \citet{BrillYurkoWyner2025}, who randomly retain a subset of plays per simulated game to reduce within-game dependence when estimating win probability. After sampling, we obtain a total of 2{,}046 lineout observations for estimation.
+
+\subsubsection{Regression Summary}
+
+The estimated regression coefficients for the lineout EP model are reported in Table~\ref{tab:regression-summary}.
+
+\begin{table}[htbp]
+\centering
+\caption{Regression summary for expected points of a lineout}
+\label{tab:regression-summary}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Coefficient} & \textbf{Estimate} & \textbf{Std. Error} & \textbf{t value} & \textbf{Pr($>|t|$)} \\
+\midrule
+Intercept      & 3.2545 & 0.2093 & 15.553 & $<$ 2e-16 *** \\
+meter\_line    & -0.0586 & 0.0044 & -13.283 & $<$ 2e-16 *** \\
+Card\_Diff     & 0.8802 & 0.3052 & 2.884 & 0.00397 ** \\
+WinPct\_Diff   & 0.6503 & 0.3430 & 1.896 & 0.05809 . \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The negative coefficient on \texttt{meter\_line} reflects the intuitive decrease in expected next-score value as the lineout moves farther away from the opposition try line. Positive coefficients on \texttt{Card\_Diff} and \texttt{WinPct\_Diff} indicate that both a player advantage and stronger underlying team quality are associated with higher expected points from the same field position. Figure~\ref{fig:ep-lineout} visualizes the relationship between field position and expected points for a lineout, holding other covariates fixed.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{ep_by_meter_line.png}
+    \caption{Average expected points of the next score given lineout position}
+    \label{fig:ep-lineout}
+\end{figure}
+
+\subsection{Expected Points of a Penalty Kick} \label{sec:kick-at-goal}
+
+The expected points of a penalty kick at goal is the sum of the value of a make and the continuation value of a miss, weighted by their respective probabilities. Unlike lineouts, kick outcomes depend primarily on the kick's distance and angle to the posts rather than just its raw field coordinates. Let $d$ denote the distance from the penalty spot to the center of the posts, and $\theta$ the lateral angle. Then
+\[
+EP_{\text{kick}}(d, \theta) = 
+\P_{\text{make}}(d, \theta) \cdot 3 
++ \big(1 - \P_{\text{make}}(d, \theta)\big) \cdot EP_{\text{miss}}(d, \theta),
+\]
+where 3 points are awarded for a successful kick, $\P_{\text{make}}(d, \theta)$ is the probability of a successful kick from $(d, \theta)$, and $EP_{\text{miss}}(d, \theta)$ is the expected points of the continuation state following a miss (e.g., change in possession, change in field position).
+
+The field coordinates $(x, y)$ of the penalty uniquely determine $(d, \theta)$ through the geometry of the pitch, so $EP_{\text{kick}}(x, y)$ can be obtained by evaluating $EP_{\text{kick}}(d, \theta)$ at the corresponding $(d, \theta)$. In the next section, we describe how we estimate $\P_{\text{make}}(d, \theta)$ using the international kicking data and how we approximate $EP_{\text{miss}}(d, \theta)$ from restart sequences in the phase-level dataset.
+
+\section{Modeling Kick Outcomes}
+
+\subsection{Estimating Kick Success Probability}
+
+We model the probability that a penalty kick at goal is successful as a smooth function of the kick's \emph{distance} ($d$) and \emph{lateral angle} ($\theta$) to the center of the posts. Our model takes the form
+\[
+\P(\text{make}\mid d, \theta) = \text{logit}^{-1}\{\beta_0 + f(d, \theta)\},
+\]
+where $f(d, \theta)$ is a two-dimensional spline estimated by a generalized additive model (GAM) with a logistic link and a quasi-binomial family to allow for overdispersion. Smoothing is selected by Restricted Maximum Likelihood to balance fit and smoothness. We validate the surface with standard calibration diagnostics and cross-validation. Estimated kick success probabilities, with dashed lines at probabilities of $(0.2, 0.4, 0.6, 0.8)$, are shown in Figure~\ref{fig:kick-success-prob}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{kick_prob_plot.png}
+    \caption{Estimated probability of kick success by position on the pitch. Note that the goal posts are located at lateral position 0. Kick probabilities begin at 5\,m from the goal line}
+    \label{fig:kick-success-prob}
+\end{figure}
+
+\subsection{Continuation Value of a Missed Kick}
+
+In rugby, a missed penalty does not end the sequence immediately. After a miss, the ball can be grounded in-goal by the defending team or it can travel past the dead-ball line, in which case play restarts with a 22\,m drop-out and the penalty-kicking team regains possession. If the ball remains live, the defense may return it from inside the 22. In practice, kicks that are returned in play occur relatively infrequently, and the labeling in our phase data does not reliably distinguish returned penalties from other open-play kicks. We therefore adopt the simplifying assumption that a missed penalty leads to a 22\,m drop-out restart.
+
+Operationally, we identify restarts that (i) do not follow a change in score (excluding post-score kick-offs) and (ii) did not occur at the start of a half, and compute the expected next-score value of those entries by restart zone, using the same EP framework as for lineouts (Section~\ref{sec:lineout}). Table~\ref{tab:ep-location} reports average expected points following kick restarts by original kick location. These restart values provide a coarse but data-driven approximation to $EP_{\text{miss}}(d, \theta)$ as a function of the original kick location.
+
+\begin{table}[htbp]
+\centering
+\caption{Average expected points following kick restarts by zone}
+\label{tab:ep-location}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Location} & \textbf{n} & \textbf{Avg. Expected Points} \\
+\midrule
+10m--22m (opp)    & 4  & 2.75 \\
+Half--10m (opp)   & 17 & 1.24 \\
+10m--Half (own)   & 27 & -0.63 \\
+22m--10m (own)    & 45 & 1.24 \\
+\midrule
+\textbf{Overall Average} & 93 & 0.76 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Penalty Kick Expected Points Surface}
+
+Combining the kick success surface and the continuation values yields an expected points surface for penalty kicks. For each location on the field, we map $(x, y)$ to $(d, \theta)$, evaluate $\P_{\text{make}}(d, \theta)$ from the GAM, and approximate $EP_{\text{miss}}(d, \theta)$ using the restart values in Table~\ref{tab:ep-location}. These quantities are then substituted into
+\[
+EP_{\text{kick}}(d, \theta) = 
+\P_{\text{make}}(d, \theta) \cdot 3 
++ \big(1 - \P_{\text{make}}(d, \theta)\big) \cdot EP_{\text{miss}}(d, \theta)
+\]
+to obtain the expected points of a kick at goal from that location. The resulting expected points surface for penalty kicks is shown in Figure~\ref{fig:kick-ep}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{kick_ep_plot.png}
+    \caption{Estimated expected points of a penalty kick by position on the pitch}
+    \label{fig:kick-ep}
+\end{figure}
+
+\section{Constructing the Penalty Decision Surface}
+
+\subsection{Adjusting for Meters Gained on Kick to Touch} \label{sec:adjustment}
+
+At each penalty location on the field, we compare the value of attempting a kick at goal with the value of kicking to touch and taking the ensuing lineout. The kick-at-goal value is calculated at the penalty spot, using the distance and lateral angle to the posts implied by that location. By contrast, the lineout value is calculated at the location where the lineout would actually occur \emph{after} the kick to touch.
+
+Let $(x, y)$ denote the penalty location, and let $d_{\text{touch}}$ denote the expected meters gained from a kick to touch along the length of the field. Starting from $x$ (distance from the opposition try line), we approximate the resulting lineout location as
+\[
+x_{\text{LO}} = \max\{5,\; x - d_{\text{touch}}\},
+\]
+shifting the ball $d_{\text{touch}}$ meters closer to the opposition try line and truncating at the 5\,m line if necessary, since the laws prohibit lineouts closer than 5\,m from the try line. The lateral coordinate $y$ is assumed unchanged by the kick to touch, so the lineout occurs at $(x_{\text{LO}}, y)$.
+
+For a given assumed gain $d_{\text{touch}}$, the expected points of choosing the lineout option from penalty location $(x, y)$ is then
+\[
+EP_{\text{lineout}}(x_{\text{LO}}),
+\]
+evaluated via the regression in Section~\ref{sec:lineout}. In our baseline decision maps we consider a grid of plausible translation distances
+\[
+d_{\text{touch}} \in \{0, 5, 10, 15, 20, 25\}\,\text{m},
+\]
+reflecting different assumptions about how much territory can be gained by kicking to touch.
+
+\subsection{Decision Maps}
+
+Given $EP_{\text{lineout}}$ and $EP_{\text{kick}}$, the relative value of a lineout versus a kick at goal at the same penalty location is
+\[
+\Delta EP(x, y; d_{\text{touch}}) 
+  = EP_{\text{lineout}}(x_{\text{LO}}) - EP_{\text{kick}}(x, y),
+\]
+where $(x, y)$ is the penalty location, $d_{\text{touch}}$ is the assumed meters gained by kicking to touch, and $x_{\text{LO}} = \max\{5,\; x - d_{\text{touch}}\}$ is the resulting lineout $x$-coordinate. Positive values of $\Delta EP(x, y; d_{\text{touch}})$ favor choosing the lineout, while negative values favor taking the kick at goal, with $\Delta EP(x, y; d_{\text{touch}}) = 0$ tracing out the indifference frontier between the two options.
+
+By mapping out $\Delta EP(x, y; d_{\text{touch}})$ across the field, we obtain decision maps that show how location and assumed meters gained shape the optimal choice. Figure~\ref{fig:kick_lineout_all} displays these maps for a range of values of $d_{\text{touch}}$.
+
+\begin{figure}[H]
+  \centering
+
+  % --- First row ---
+  \begin{subfigure}[b]{0.45\linewidth}
+    \includegraphics[width=\linewidth]{kick_vs_lineout_shift_0m.png}
+    \caption{$d_{\text{touch}} = 0$\,m}
+    \label{fig:kick_lineout_0}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.45\linewidth}
+    \includegraphics[width=\linewidth]{kick_vs_lineout_shift_5m.png}
+    \caption{$d_{\text{touch}} = 5$\,m}
+    \label{fig:kick_lineout_5}
+  \end{subfigure}
+
+  \vspace{0.5em}
+
+  % --- Second row ---
+  \begin{subfigure}[b]{0.45\linewidth}
+    \includegraphics[width=\linewidth]{kick_vs_lineout_shift_10m.png}
+    \caption{$d_{\text{touch}} = 10$\,m}
+    \label{fig:kick_lineout_10}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.45\linewidth}
+    \includegraphics[width=\linewidth]{kick_vs_lineout_shift_15m.png}
+    \caption{$d_{\text{touch}} = 15$\,m}
+    \label{fig:kick_lineout_15}
+  \end{subfigure}
+
+  \vspace{0.5em}
+
+  % --- Third row ---
+  \begin{subfigure}[b]{0.45\linewidth}
+    \includegraphics[width=\linewidth]{kick_vs_lineout_shift_20m.png}
+    \caption{$d_{\text{touch}} = 20$\,m}
+    \label{fig:kick_lineout_20}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.45\linewidth}
+    \includegraphics[width=\linewidth]{kick_vs_lineout_shift_25m.png}
+    \caption{$d_{\text{touch}} = 25$\,m}
+    \label{fig:kick_lineout_25}
+  \end{subfigure}
+
+  \caption{Decision maps comparing the expected points of a lineout versus a kick at goal for different assumed meters gained to touch $d_{\text{touch}}$.}
+  \label{fig:kick_lineout_all}
+\end{figure}
+
+\section{Scenario Analysis}
+
+Changing the game context---that is, changing the covariates in our regression model---allows us to construct hypothetical decision surfaces under different circumstances.
+
+\subsection{Manpower Advantages and Disadvantages}
+
+In rugby union, manpower differentials occur when a player receives a yellow or red card and is sent off the field (for 10 minutes for a yellow and for the rest of the game for a red card). This directly affects the \texttt{Card\_Diff} covariate in the lineout EP model.
+
+\begin{figure}[htbp]
+  \centering
+
+  \begin{subfigure}[b]{0.32\linewidth}
+    \includegraphics[width=\linewidth]{own_yellow.png}
+    \caption{Own team yellow card}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.32\linewidth}
+    \includegraphics[width=\linewidth]{no_yellow.png}
+    \caption{No yellow card}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.32\linewidth}
+    \includegraphics[width=\linewidth]{opponent_yellow.png}
+    \caption{Opposing team yellow card}
+  \end{subfigure}
+
+  \caption{Decision maps under different manpower states, holding other covariates fixed.}
+  \label{fig:manpower}
+\end{figure}
+
+As shown in Figure~\ref{fig:manpower}, the decision surface changes significantly depending on the presence and direction of a yellow card, with kicks being preferred more often when the attacking team is down a player and lineouts being preferred more often when the attacking team has a numerical advantage.
+
+\subsection{Strong vs.\ Weak Teams}
+
+We can also examine how the decision surface changes for teams with positive or negative win-percentage differentials by varying \texttt{WinPct\_Diff}.
+
+\begin{figure}[htbp]
+  \centering
+
+  \begin{subfigure}[b]{0.32\linewidth}
+    \includegraphics[width=\linewidth]{bad_team.png}
+    \caption{--25 percentage-point win differential}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.32\linewidth}
+    \includegraphics[width=\linewidth]{no_yellow.png}
+    \caption{Evenly matched teams}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.32\linewidth}
+    \includegraphics[width=\linewidth]{good_team.png}
+    \caption{+25 percentage-point win differential}
+  \end{subfigure}
+
+  \caption{Decision maps for teams with different win-percentage differentials.}
+  \label{fig:team-strength}
+\end{figure}
+
+As illustrated in Figure~\ref{fig:team-strength}, stronger teams (positive \texttt{WinPct\_Diff}) realize larger expected points from lineouts across much of the pitch, making the aggressive option more attractive. Weaker teams (negative \texttt{WinPct\_Diff}) are relatively better off taking points from penalty kicks, though the effect is less pronounced than the impact of yellow cards.
+
+\section{Case Study: New Zealand vs.\ South Africa}
+
+We now apply the model to a real match to illustrate both single-decision analysis and aggregate decision quality. The data were collected by the authors from a match between New Zealand and South Africa played on September 16th, 2025.
+
+\subsection{A Single Penalty Decision}
+
+Consider a penalty awarded to South Africa in the 22nd minute, 15\,m from the left touch line and 30\,m from the opposition try line. We can set up this decision graphically by varying the expected distance that a kick to touch would gain. There were no yellow or red cards in effect, and we assume the teams were evenly matched (difference in win percentage equal to 0).
+
+Figure~\ref{fig:delta-intercept-reg} displays $\Delta EP(x, y; d_{\text{touch}})$ as a function of $d_{\text{touch}}$ for this specific penalty location. The lineout becomes preferable once the expected gain exceeds roughly 16\,m.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{delta_plot.png}
+    \caption{Expected points difference between lineout and kick at goal as a function of meters gained to touch}
+    \label{fig:delta-intercept-reg}
+\end{figure}
+
+From this field position it would be reasonable to gain 20--25\,m of territory by opting for the lineout. Conservatively assuming a 20\,m translation, the model’s recommendation at the penalty location is shown in Figure~\ref{fig:my_image}.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\linewidth]{baseline_with_marker.png}
+  \caption{Penalty decision at the observed field position (marker denotes the penalty location)}
+  \label{fig:my_image}
+\end{figure}
+
+At this point on the pitch, the optimal decision from the model is to go for the lineout. The expected points for each option at the marker location, together with the resulting $\Delta EP = EP_{\text{lineout}} - EP_{\text{kick}}$, are reported in Table~\ref{tab:case-study}.
+
+\begin{table}[H]
+\centering
+\caption{Expected points of lineout vs.\ kick at the marker location}
+\label{tab:case-study}
+\begin{tabular}{lccc}
+\toprule
+ & \textbf{EP Lineout} & \textbf{EP Kick} & $\boldsymbol{\Delta EP}$ \\
+\midrule
+\textbf{Value} & 2.67 & 2.42 & 0.25 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Here $\Delta EP = 0.25$ in favour of the lineout, implying that by electing to kick at goal in this situation, South Africa, in expectation, forfeited approximately 0.25 points relative to the lineout option.
+
+\subsection{All Penalty Decisions in the Match}
+
+We can also compare decision quality over all relevant penalties in the match. For each penalty, we define a \emph{regret} quantity
+\[
+R = EP_{\text{optimal}} - EP_{\text{actual}},
+\]
+where $EP_{\text{optimal}}$ is the expected points of the model-preferred option (lineout or kick) and $EP_{\text{actual}}$ is the expected points of the option actually chosen. Positive values of $R$ indicate points lost in expectation by deviating from the model’s recommendation. Table~\ref{tab:ep_comparison} presents all penalty decisions taken within 60\,m of the opponents' try line for both teams, together with the expected points of each option, the model-implied optimal decision, and the associated regret. We assume a flat 20\,m gained for each lineout and again treat the teams as equally matched.
+
+\begin{table}[htbp]
+\centering
+\caption{Expected points for lineouts and kicks: actual vs.\ optimal decision}
+\label{tab:ep_comparison}
+\begin{tabular}{lccccc}
+\hline
+Team & Lineout EP & Kick EP & Decision & Optimal Decision & $R$ \\
+\hline
+NZ & 1.79 & 1.85 & kick     & kick     & 0.00 \\
+NZ & 2.26 & 1.93 & lineout  & lineout  & 0.00 \\
+SA & 1.56 & 1.87 & lineout  & kick     & 0.31 \\
+SA & 2.67 & 2.42 & kick     & lineout  & 0.25 \\
+SA & 1.91 & 1.66 & kick     & lineout  & 0.25 \\
+SA & 1.50 & 1.60 & lineout  & kick     & 0.10 \\
+NZ & 2.73 & 2.64 & kick     & lineout  & 0.09 \\
+SA & 2.08 & 2.07 & lineout  & lineout  & 0.00 \\
+NZ & 2.96 & 2.39 & lineout  & lineout  & 0.00 \\
+NZ & 2.96 & 2.53 & lineout  & lineout  & 0.00 \\
+SA & 2.61 & 2.39 & lineout  & kick     & 0.22 \\
+SA & 1.14 & 1.31 & lineout  & kick     & 0.17 \\
+SA & 2.90 & 2.84 & lineout  & lineout  & 0.00 \\
+\hline
+\end{tabular}
+\end{table}
+
+Summary metrics of decision quality for this match are reported in Table~\ref{tab:summary_metrics}.
+
+\begin{table}[htbp]
+\centering
+\caption{Summary metrics of decision quality for the case-study match}
+\label{tab:summary_metrics}
+\begin{tabular}{lc}
+\hline
+Metric & Value \\
+\hline
+Total regret $R$ & 1.39 \\
+Proportion of Optimal Decisions & 0.46 \\
+\hline
+\end{tabular}
+\end{table}
+
+As summarized in Table~\ref{tab:summary_metrics}, the model’s optimal EP decision was made 46\% of the time, leading to a total regret of 1.39 points in expectation between both teams. While the proportion of ``incorrect'' decisions seems relatively high, the expected points lost from sub-optimal decision making is modest. For context, the game ended 24--17 to New Zealand, so 1.39 points would not have swung the outcome. Given that these international teams are at the pinnacle of the sport, the observed level of inefficiency is perhaps unsurprising: most decisions are near the indifference frontier, where the cost of making the ``wrong'' choice is relatively small.
+
+\section{Discussion}
+
+\subsection{Conclusions}
+
+This paper develops a decision-ready Expected Points framework for evaluating whether to kick for goal or kick to touch following a penalty in rugby union. By combining a lineout-based EP model from phase-level Premiership data with an angle--distance model of penalty kick success and a continuation value for missed kicks, we obtain two context-aware EP surfaces and a derived decision surface that identifies where each option maximizes expected return.
+
+The resulting decision maps make the penalty decision explicit as a function of field location, expected meters gained to touch, player advantages, and team-strength differentials. Scenario analyses show how the indifference frontier shifts with yellow cards and team quality, while the case study of New Zealand vs.\ South Africa demonstrates how the framework can be used to evaluate both individual choices and aggregate decision quality through a regret measure. In that match, the model suggests that sub-optimal decisions were relatively frequent but typically near the decision boundary, so that total regret in expected points was modest relative to the final score margin.
+
+Because the framework is modular, it can be adapted to different competitions or tailored to specific teams by refitting the underlying EP components with alternative data sources. The lineout and kicking modules can be updated independently as richer data become available, providing a transparent foundation for decision-support tools in both professional and amateur settings.
+
+\subsection{Limitations and Future Directions}
+
+Several assumptions and data limitations should be acknowledged, along with concrete directions for addressing them in future work.
+
+First, the model combines phase-level data from club competitions with penalty-kicking data from international matches, introducing potential inconsistencies in player quality, decision-making, and context. Future work could develop fully competition-specific models by collecting phase-level and kicking data from the same league and year, or by fitting hierarchical models that allow competition-level differences in both lineout and kicking performance to be estimated explicitly.
+
+Second, the analysis restricts team choices to kicking for goal or kicking to touch, even though teams occasionally opt for a scrum or a quick tap---particularly near the try line---albeit infrequently. Extending the framework to additional decision branches is natural: EP models can be trained for scrums and tap-and-go restarts using the same phase-level machinery, enabling multi-armed decision maps that compare all realistic options from a given penalty location.
+
+Third, the analysis is limited to a single season, which constrains the sample size and reduces the generalizability of the findings across competitions or years. Future work could pool multiple seasons and competitions, possibly with random effects for season and league, to increase sample size, stabilize estimates in rare field zones, and quantify between-competition variation in EP surfaces.
+
+Fourth, selection bias may influence the results \citep{BrillYurkoWyner2025}. Stronger teams are both more likely to generate attacking lineouts in the opposition half and more likely to earn penalties. As a result, lineouts in advanced field positions are disproportionately taken by stronger sides, potentially inflating expected points estimates for lineouts near the try line. A similar dynamic is present for the kicking data, since stronger sides will have generated more of the observed penalties, and coaches may only elect to kick when they deem the attempt makeable for their kicker. Future research could focus on further de-biasing EP estimates with respect to the underlying decision processes that generated the data.
+
+Fifth, the data do not track individual kicker ability when aiming for touch to gain territory, making it necessary to assume a translation distance between the penalty location and the resulting lineout. Future analyses trained on proprietary tracking or event data could incorporate player- and team-specific models for both goal-kicking accuracy and meters gained to touch, producing personalized decision maps that reflect the strengths of particular kickers and lineout units rather than competition averages.
+
+Sixth, the current datasets lack the granularity of precise $(x, y)$ field coordinates for penalty locations and lineouts, relying instead on zonal encodings and an approximate mapping to continuous coordinates. Improvements in data collection---for example, through optical or GPS tracking---would allow EP surfaces to be estimated directly on a fine spatial grid, supporting smoother decision boundaries, more accurate modeling of angle-dependent effects, and better treatment of corner and touchline situations.
+
+Lastly, this modeling framework optimizes expected points. A common critique of expected-points-based decision models is that they maximize expected points rather than expected win probability (the quantity that ultimately matters in a game). A natural extension is to develop win-probability models that incorporate field location, score differential, time remaining, and player imbalances resulting from yellow or red cards. Decisions could then be evaluated directly on the scale of win probability, with EP retained as an interpretable intermediate quantity.
+
+\bibliographystyle{apalike}
+\bibliography{references}
+
+\end{document}
