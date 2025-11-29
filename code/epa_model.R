@@ -851,6 +851,99 @@ good_team <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
 ggsave("plots/good_team.png", good_team,
        width = 10, height = 8, dpi = 300)
 
+#####################################
+### South Africa v.s. New Zealand ###
+#####################################
+
+sep_game_data_csv = read_csv("data/All Blacks vs South Africa Game Sep 16th.csv")
+
+sep_game_data_csv <- sep_game_data_csv %>%
+  rename(
+    x = `x location`,
+    y = `y location`
+  ) %>%
+  mutate(
+    x = x - 35,
+    y = y
+  )
+
+# Rows without cards
+
+expected_points <- intercept + coef_meter * meter_seq + 
+  coef_card * 0 + coef_win_per * 0
+
+plot_data <- data.frame(
+  meter_line = meter_seq,
+  expected_points = expected_points
+)
+
+scenario_max_lineout_ep <- max(plot_data$expected_points)
+
+grid_scenario <- grid %>%
+  select(-lineout_ep) %>%
+  left_join(plot_data, by = c("y" = "meter_line")) %>%
+  rename(lineout_ep = expected_points)
+
+grid_scenario <- grid_scenario %>%
+  mutate(
+    lineout_ep_shifted = pmin(lineout_ep, max(lineout_ep)),
+    lineout_ep_shifted = approx(y, lineout_ep, xout = y + y_shift, rule = 2)$y,
+    
+    point_diff = lineout_ep_shifted - kick_ep
+  )
+
+data_with_ep <- sep_game_data_csv %>%
+  # Join lineout EP based on shifted y
+  left_join(
+    grid_scenario %>% select(x, y, lineout_ep),
+    by = c("x" = "x", "distance_from_try_after_shift" = "y")
+  ) %>%
+  # Join kick EP based on original y
+  left_join(
+    grid_scenario %>% select(x, y, kick_ep),
+    by = c("x" = "x", "y" = "y")
+  ) %>%
+  mutate(
+    # difference between lineout and kick, including card differential effect
+    point_diff = lineout_ep - kick_ep + Card_Diff_val * coef_card
+  )
+
+table_ep <- data_with_ep %>%
+  mutate(
+    # Determine optimal decision: lineout if point_diff > 0, else kick
+    optimal_decision = ifelse(point_diff > 0, "lineout", "kick")
+  ) %>%
+  select(
+    Team,             # team in possession
+    lineout_ep,       # expected points if choosing lineout
+    kick_ep,          # expected points if choosing kick
+    Decision,         # actual decision taken
+    optimal_decision  # optimal decision based on EP
+  ) %>%
+  mutate(
+    # EP for optimal and actual decision
+    EP_optimal = ifelse(optimal_decision == "lineout", lineout_ep, kick_ep),
+    EP_actual  = ifelse(Decision == "lineout", lineout_ep, kick_ep),
+    
+    # Difference: optimal - actual
+    ep_diff = abs(EP_optimal - EP_actual)
+  )
+
+table_ep <- table_ep %>%
+  mutate(
+    Team = recode(Team, "AB" = "NZ")
+  )
+
+table_ep
+
+summary_metrics <- table_ep %>%
+  summarise(
+    total_delta_ep = sum(ep_diff), 
+    prop_optimal = mean(Decision == optimal_decision) 
+  )
+
+print(summary_metrics)
+
 
 ##################
 ### REFERENCES ###
