@@ -274,6 +274,59 @@ ep_by_meter_line <- ggplot(plot_data, aes(x = meter_line, y = expected_points)) 
 ggsave("plots/ep_by_meter_line.png", ep_by_meter_line,
        width = 10, height = 8, dpi = 300)
 
+##############################
+### Categorical Regression ###
+##############################
+
+# Ensure variables are properly formatted
+sampled_phase_data$points <- factor(sampled_phase_data$points)
+sampled_phase_data$meter_line <- factor(sampled_phase_data$meter_line)
+
+# MULTINOMIAL LOGISTIC REGRESSION
+multinomial_model <- multinom(points ~ meter_line + Card_Diff + WinPct_Diff,
+                              data = sampled_phase_data)
+
+summary(multinomial_model)
+
+# CALCULATE EXPECTED POINTS AT EACH METER LINE
+# Create prediction data with average Card_Diff and WinPct_Diff
+meter_lines <- unique(sampled_phase_data$meter_line)
+pred_data <- data.frame(
+  meter_line = meter_lines,
+  Card_Diff = mean(sampled_phase_data$Card_Diff, na.rm = TRUE),
+  WinPct_Diff = mean(sampled_phase_data$WinPct_Diff, na.rm = TRUE)
+)
+
+# Get predicted probabilities
+probs_multi <- predict(multinomial_model, newdata = pred_data, type = "probs")
+
+# Convert to data frame if needed
+if (is.vector(probs_multi)) {
+  probs_multi <- matrix(probs_multi, nrow = 1)
+}
+
+# Calculate expected points
+point_values <- as.numeric(as.character(levels(sampled_phase_data$points)))
+expected_points_multi <- probs_multi %*% point_values
+
+results_multi <- data.frame(
+  meter_line = pred_data$meter_line,
+  expected_points = as.vector(expected_points_multi),
+  probs_multi
+)
+
+print("Expected Points by Meter Line:")
+print(results_multi)
+
+# Plotting EP
+ggplot(results_multi, aes(x = meter_line, y = expected_points, group = 1)) +
+  geom_line(size = 1, color = "steelblue") +
+  geom_point(size = 3, color = "steelblue") +
+  labs(title = "Expected Points by Meter Line",
+       x = "Meter Line",
+       y = "Expected Points") +
+  theme_minimal()
+
 ###############################
 ### KICKING EXPECTED POINTS ###
 ###############################
