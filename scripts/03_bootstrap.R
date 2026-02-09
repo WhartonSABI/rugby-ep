@@ -81,7 +81,7 @@ bootstrap_outputs <- list(
   expected_points_summary = results_multi_ci
 )
 
-saveRDS(bootstrap_outputs, "data/multinomial_cluster_bootstrap.rds")
+saveRDS(bootstrap_outputs, "data/bootstrap.rds")
 
 # Plotting EP with uncertainty at each zone (discrete; no continuous curve)
 multi_ep_plot <- ggplot(results_multi_ci, aes(x = meter_line, y = expected_points)) +
