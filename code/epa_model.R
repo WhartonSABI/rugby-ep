@@ -282,14 +282,13 @@ ggsave("plots/ep_by_meter_line.png", ep_by_meter_line,
 sampled_phase_data$points <- factor(sampled_phase_data$points)
 sampled_phase_data$meter_line <- factor(sampled_phase_data$meter_line)
 
-# MULTINOMIAL LOGISTIC REGRESSION
+# Multinomial regression
 multinomial_model <- multinom(points ~ meter_line + Card_Diff + WinPct_Diff,
                               data = sampled_phase_data)
 
 summary(multinomial_model)
 
-# CALCULATE EXPECTED POINTS AT EACH METER LINE
-# Create prediction data with average Card_Diff and WinPct_Diff
+# Calc expected points at each meter line
 meter_lines <- unique(sampled_phase_data$meter_line)
 pred_data <- data.frame(
   meter_line = meter_lines,
