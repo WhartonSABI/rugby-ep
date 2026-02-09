@@ -341,6 +341,51 @@ ep_by_meter_line <- ggplot(plot_data, aes(x = meter_line, y = expected_points)) 
 ggsave("plots/ep_by_meter_line.png", ep_by_meter_line,
        width = 10, height = 8, dpi = 300)
 
+build_lineout_smoother <- function(card_diff = 0, win_pct_diff = 0) {
+  ep_zone <- predict_lineout_ep(
+    meter_lines,
+    card_diff = card_diff,
+    win_pct_diff = win_pct_diff,
+    model = multinomial_model
+  )
+
+  iso_fit <- isoreg(meter_lines, ep_zone)
+  splinefun(iso_fit$x, iso_fit$yf, method = "monoH.FC")
+}
+
+plot_data_comparison <- plot_data %>%
+  mutate(
+    expected_points_smooth = build_lineout_smoother()(meter_line)
+  ) %>%
+  tidyr::pivot_longer(
+    cols = c(expected_points, expected_points_smooth),
+    names_to = "surface",
+    values_to = "expected_points"
+  ) %>%
+  mutate(surface = recode(
+    surface,
+    expected_points = "Zonal model (step)",
+    expected_points_smooth = "Interpolated surrogate"
+  ))
+
+ep_by_meter_line_comparison <- ggplot(
+  plot_data_comparison,
+  aes(x = meter_line, y = expected_points, color = surface)
+) +
+  geom_line(linewidth = 1.1) +
+  geom_point(size = 2) +
+  labs(
+    title = "Expected Points by Field Zone",
+    subtitle = "Interpolated curve is a post-processing surrogate built from zonal EP estimates",
+    x = "Distance from try line (m)",
+    y = "Expected Points",
+    color = "Surface"
+  ) +
+  theme_minimal(base_size = 14)
+
+ggsave("plots/ep_by_meter_line_comparison.png", ep_by_meter_line_comparison,
+       width = 10, height = 8, dpi = 300)
+
 #########################
 ### Cluster Bootstrap ###
 #########################
@@ -531,31 +576,56 @@ ggsave("plots/kick_ep_plot.png", kick_ep_plot,
 plot_data <- plot_data %>%
   rename(lineout_ep = expected_points)
 
-# Multinomial gives EP only at discrete zones. No interpolation: assign y to a zone using
-# explicit boundaries from the data (Location ranges), then use that zone's model prediction.
 zone_for_y <- function(y) {
   idx <- findInterval(y, zone_boundaries_m, rightmost.closed = TRUE)
   idx <- pmin(pmax(idx, 1L), length(meter_lines))
   meter_lines[idx]
 }
-lineout_ep_at_y <- function(y_new, card_diff = 0, win_pct_diff = 0) {
+
+lineout_ep_at_y_step <- function(y_new, card_diff = 0, win_pct_diff = 0) {
   zone_meter <- zone_for_y(y_new)
   predict_lineout_ep(zone_meter, card_diff, win_pct_diff, multinomial_model)
+}
+
+lineout_ep_at_y_interp <- function(y_new, card_diff = 0, win_pct_diff = 0) {
+  smoother <- build_lineout_smoother(card_diff = card_diff, win_pct_diff = win_pct_diff)
+  y_clipped <- pmin(pmax(y_new, min(meter_lines)), max(meter_lines))
+  as.numeric(smoother(y_clipped))
+}
+
+lineout_ep_at_y <- function(y_new, card_diff = 0, win_pct_diff = 0, method = c("step", "interp")) {
+  method <- match.arg(method)
+  if (method == "step") {
+    return(lineout_ep_at_y_step(y_new, card_diff = card_diff, win_pct_diff = win_pct_diff))
+  }
+  lineout_ep_at_y_interp(y_new, card_diff = card_diff, win_pct_diff = win_pct_diff)
 }
 
 grid <- grid %>%
   rename(kick_ep = expected_points) %>%
   mutate(
-    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0),
-    point_diff = lineout_ep - kick_ep
+    lineout_ep_step = lineout_ep_at_y_step(y, card_diff = 0, win_pct_diff = 0),
+    lineout_ep_interp = lineout_ep_at_y_interp(y, card_diff = 0, win_pct_diff = 0),
+    point_diff_step = lineout_ep_step - kick_ep,
+    point_diff_interp = lineout_ep_interp - kick_ep
   )
 
-# EP of Lineout minus EP of penalty kick
-# Uses multinomial lineout EP estimates with Card_Diff = 0 and WinPct_Diff = 0
-# Also assumes no advancing of lineout from penalty location
+point_diff_long <- grid %>%
+  select(x, y, point_diff_step, point_diff_interp) %>%
+  tidyr::pivot_longer(
+    cols = c(point_diff_step, point_diff_interp),
+    names_to = "surface",
+    values_to = "point_diff"
+  ) %>%
+  mutate(surface = recode(
+    surface,
+    point_diff_step = "Zonal model (step)",
+    point_diff_interp = "Interpolated surrogate"
+  ))
 
-no_shift_plot <- ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
+no_shift_plot <- ggplot(point_diff_long, aes(x = x, y = y, fill = point_diff)) +
   geom_raster(interpolate = TRUE) +
+  facet_wrap(~surface) +
   scale_fill_gradient2(
     low = "#E76F51",
     mid = "white",
@@ -566,6 +636,7 @@ no_shift_plot <- ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
   coord_fixed() +
   labs(
     title = "Point Differential: Lineout EP – Kick EP",
+    subtitle = "Step surface is model-identified; interpolated surface is a post-processing approximation",
     x = "Field Width (x)",
     y = "Field Length (y)",
     fill = "Point Diff"
@@ -577,7 +648,8 @@ ggsave("plots/no_shift_plot.png", no_shift_plot,
 
 # Shifting location of lineout forward
 
-max_lineout_ep <- max(grid$lineout_ep)
+max_lineout_ep_step <- max(grid$lineout_ep_step)
+max_lineout_ep_interp <- max(grid$lineout_ep_interp)
 
 y_shifts <- c(0, -5, -10, -15, -20, -25)
 
@@ -589,23 +661,39 @@ plots <- lapply(y_shifts, function(shift) {
     
     left_join(
       grid %>%
-        select(x, y, lineout_ep) %>%
-        rename(y_shifted = y, lineout_ep_shifted = lineout_ep),
+        select(x, y, lineout_ep_step, lineout_ep_interp) %>%
+        rename(
+          y_shifted = y,
+          lineout_ep_shifted_step = lineout_ep_step,
+          lineout_ep_shifted_interp = lineout_ep_interp
+        ),
       by = c("x", "y_shifted")
     ) %>%
-    
-    # If y_shifted < min(y), then lineout_ep_shifted becomes NA — replace with max
     mutate(
-      lineout_ep_shifted = ifelse(
-        is.na(lineout_ep_shifted),
-        max_lineout_ep,
-        lineout_ep_shifted
-      ),
-      point_diff_shifted = lineout_ep_shifted - kick_ep
-    )
-  
-  p <- ggplot(grid_shifted, aes(x = x, y = y, fill = point_diff_shifted)) +
+      lineout_ep_shifted_step = ifelse(is.na(lineout_ep_shifted_step),
+                                       max_lineout_ep_step,
+                                       lineout_ep_shifted_step),
+      lineout_ep_shifted_interp = ifelse(is.na(lineout_ep_shifted_interp),
+                                         max_lineout_ep_interp,
+                                         lineout_ep_shifted_interp),
+      point_diff_shifted_step = lineout_ep_shifted_step - kick_ep,
+      point_diff_shifted_interp = lineout_ep_shifted_interp - kick_ep
+    ) %>%
+    select(x, y, point_diff_shifted_step, point_diff_shifted_interp) %>%
+    tidyr::pivot_longer(
+      cols = c(point_diff_shifted_step, point_diff_shifted_interp),
+      names_to = "surface",
+      values_to = "point_diff"
+    ) %>%
+    mutate(surface = recode(
+      surface,
+      point_diff_shifted_step = "Zonal model (step)",
+      point_diff_shifted_interp = "Interpolated surrogate"
+    ))
+
+  p <- ggplot(grid_shifted, aes(x = x, y = y, fill = point_diff)) +
     geom_raster(interpolate = TRUE) +
+    facet_wrap(~surface) +
     scale_fill_gradient2(
       low = "#E76F51",
       mid = "white",
@@ -634,7 +722,7 @@ marker_y <- 30
 
 y_shifts <- seq(0, -30, by = -1)
 
-max_lineout_ep <- max(grid$lineout_ep)   # EP at y = 5 (the min y)
+max_lineout_ep <- max(grid$lineout_ep_step)
 
 shift_results <- lapply(y_shifts, function(shift) {
   
@@ -644,8 +732,8 @@ shift_results <- lapply(y_shifts, function(shift) {
     ) %>%
     left_join(
       grid %>%
-        select(x, y, lineout_ep) %>%
-        rename(y_shifted = y, lineout_ep_shifted = lineout_ep),
+        select(x, y, lineout_ep_step) %>%
+        rename(y_shifted = y, lineout_ep_shifted = lineout_ep_step),
       by = c("x", "y_shifted")
     ) %>%
     mutate(
