@@ -236,44 +236,6 @@ ggsave("plots/card_dif_marginal.png", card_dif_marginal,
        width = 10, height = 8, dpi = 300)
 
 
-regression <- lm(points ~ meter_line + Card_Diff + WinPct_Diff,
-                 data = sampled_phase_data)
-
-summary(regression)
-
-
-# Plotting EP of Lineout
-
-# Regression coefficients (will be updated after running regression)
-regression_summary <- summary(regression)
-intercept <- regression_summary$coefficients["(Intercept)", "Estimate"]
-coef_meter <- regression_summary$coefficients["meter_line", "Estimate"]
-coef_card <- regression_summary$coefficients["Card_Diff", "Estimate"]
-coef_win_per <- regression_summary$coefficients["WinPct_Diff", "Estimate"]
-
-meter_seq <- seq(0, 100, by = 1)
-
-expected_points <- intercept + coef_meter * meter_seq + 
-  coef_card * 0 + coef_win_per * 0
-
-plot_data <- data.frame(
-  meter_line = meter_seq,
-  expected_points = expected_points
-)
-
-ep_by_meter_line <- ggplot(plot_data, aes(x = meter_line, y = expected_points)) +
-  geom_line(size = 1.2, color = "blue") +
-  labs(
-    title = "Expected Points by Meter Line",
-    subtitle = "Assuming Card_Diff = 0 and WinPct_Diff = 0",
-    x = "Meters from Try Line",
-    y = "Expected Points"
-  ) +
-  theme_minimal(base_size = 14)
-
-ggsave("plots/ep_by_meter_line.png", ep_by_meter_line,
-       width = 10, height = 8, dpi = 300)
-
 ##############################
 ### Categorical Regression ###
 ##############################
@@ -306,6 +268,22 @@ pred_data <- tibble(
 point_levels <- levels(sampled_phase_data$points_factor)
 point_values <- as.numeric(as.character(point_levels))
 
+predict_lineout_ep <- function(meter_line, card_diff = 0, win_pct_diff = 0, model = multinomial_model) {
+  new_data <- tibble(
+    meter_line = meter_line,
+    meter_line_factor = factor(meter_line, levels = levels(sampled_phase_data$meter_line_factor)),
+    Card_Diff = card_diff,
+    WinPct_Diff = win_pct_diff
+  )
+
+  probs <- predict(model, newdata = new_data, type = "probs")
+  if (is.vector(probs)) {
+    probs <- matrix(probs, nrow = 1)
+  }
+
+  as.vector(probs %*% point_values)
+}
+
 # Get predicted probabilities
 probs_multi <- predict(multinomial_model, newdata = pred_data, type = "probs")
 
@@ -325,6 +303,24 @@ results_multi <- data.frame(
 
 print("Expected Points by Meter Line (point estimate):")
 print(results_multi)
+
+plot_data <- tibble(
+  meter_line = meter_lines,
+  expected_points = predict_lineout_ep(meter_lines, card_diff = 0, win_pct_diff = 0)
+)
+
+ep_by_meter_line <- ggplot(plot_data, aes(x = meter_line, y = expected_points)) +
+  geom_line(size = 1.2, color = "blue") +
+  labs(
+    title = "Expected Points by Meter Line",
+    subtitle = "Multinomial model with Card_Diff = 0 and WinPct_Diff = 0",
+    x = "Meters from Try Line",
+    y = "Expected Points"
+  ) +
+  theme_minimal(base_size = 14)
+
+ggsave("plots/ep_by_meter_line.png", ep_by_meter_line,
+       width = 10, height = 8, dpi = 300)
 
 #########################
 ### Cluster Bootstrap ###
@@ -524,8 +520,8 @@ grid <- grid %>%
     point_diff = lineout_ep - kick_ep
 )
 
-# EP of Lineout minus EP of penalty kick 
-# Assumes all coeffs = 0 expect meter_line, home, and intercept
+# EP of Lineout minus EP of penalty kick
+# Uses multinomial lineout EP estimates with Card_Diff = 0 and WinPct_Diff = 0
 # Also assumes no advancing of lineout from penalty location
 
 no_shift_plot <- ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
@@ -693,12 +689,9 @@ y_shift <- -20
 
 meter_seq <- seq(0, 100, by = 1)
 
-expected_points <- intercept + coef_meter * meter_seq + 
-  coef_card * 0 + coef_win_per * 0
-
-plot_data <- data.frame(
+plot_data <- tibble(
   meter_line = meter_seq,
-  expected_points = expected_points
+  expected_points = predict_lineout_ep(meter_seq, card_diff = 0, win_pct_diff = 0)
 )
 
 scenario_max_lineout_ep <- max(plot_data$expected_points)
@@ -773,12 +766,9 @@ marker_values
 
 # Scenario 2 - Yellow Cards
 
-expected_points <- intercept + coef_meter * meter_seq + 
-  coef_card * 1 + coef_win_per * 0
-
-plot_data <- data.frame(
+plot_data <- tibble(
   meter_line = meter_seq,
-  expected_points = expected_points
+  expected_points = predict_lineout_ep(meter_seq, card_diff = 1, win_pct_diff = 0)
 )
 
 scenario_max_lineout_ep <- max(plot_data$expected_points)
@@ -818,12 +808,9 @@ ggsave("plots/opponent_yellow.png", opponent_yellow,
        width = 10, height = 8, dpi = 300)
 
 
-expected_points <- intercept + coef_meter * meter_seq + 
-  coef_card * 0 + coef_win_per * 0
-
-plot_data <- data.frame(
+plot_data <- tibble(
   meter_line = meter_seq,
-  expected_points = expected_points
+  expected_points = predict_lineout_ep(meter_seq, card_diff = 0, win_pct_diff = 0)
 )
 
 scenario_max_lineout_ep <- max(plot_data$expected_points)
@@ -864,12 +851,9 @@ ggsave("plots/no_yellow.png", no_yellow,
 
 
 
-expected_points <- intercept + coef_meter * meter_seq + 
-  coef_card * -1 + coef_win_per * 0
-
-plot_data <- data.frame(
+plot_data <- tibble(
   meter_line = meter_seq,
-  expected_points = expected_points
+  expected_points = predict_lineout_ep(meter_seq, card_diff = -1, win_pct_diff = 0)
 )
 
 scenario_max_lineout_ep <- max(plot_data$expected_points)
@@ -911,12 +895,9 @@ ggsave("plots/own_yellow.png", own_yellow,
 
 # Scenario 3 - Team Quality
 
-expected_points <- intercept + coef_meter * meter_seq + 
-  coef_card * 0 + coef_win_per * -0.25
-
-plot_data <- data.frame(
+plot_data <- tibble(
   meter_line = meter_seq,
-  expected_points = expected_points
+  expected_points = predict_lineout_ep(meter_seq, card_diff = 0, win_pct_diff = -0.25)
 )
 
 scenario_max_lineout_ep <- max(plot_data$expected_points)
@@ -957,12 +938,9 @@ ggsave("plots/bad_team.png", bad_team,
 
 
 
-expected_points <- intercept + coef_meter * meter_seq + 
-  coef_card * 0 + coef_win_per * 0.25
-
-plot_data <- data.frame(
+plot_data <- tibble(
   meter_line = meter_seq,
-  expected_points = expected_points
+  expected_points = predict_lineout_ep(meter_seq, card_diff = 0, win_pct_diff = 0.25)
 )
 
 scenario_max_lineout_ep <- max(plot_data$expected_points)
@@ -1019,12 +997,9 @@ sep_game_data_csv <- sep_game_data_csv %>%
 
 # Rows without cards
 
-expected_points <- intercept + coef_meter * meter_seq + 
-  coef_card * 0 + coef_win_per * 0
-
-plot_data <- data.frame(
+plot_data <- tibble(
   meter_line = meter_seq,
-  expected_points = expected_points
+  expected_points = predict_lineout_ep(meter_seq, card_diff = 0, win_pct_diff = 0)
 )
 
 scenario_max_lineout_ep <- max(plot_data$expected_points)
@@ -1055,7 +1030,7 @@ data_with_ep <- sep_game_data_csv %>%
   ) %>%
   mutate(
     # difference between lineout and kick, including card differential effect
-    point_diff = lineout_ep - kick_ep + Card_Diff_val * coef_card
+    point_diff = lineout_ep - kick_ep
   )
 
 table_ep <- data_with_ep %>%
