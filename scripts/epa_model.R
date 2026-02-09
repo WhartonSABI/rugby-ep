@@ -36,14 +36,7 @@ phase_data <- phase_data %>%
     points = ifelse(is.na(points), 0, points)
   )
 
-# Keeping just first phases beginning with lineouts
-phase_data <- phase_data %>%
-  filter(
-    Play_Start == "Lineout",
-    Phase == 1
-  )
-
-# Getting final score of the match
+# Getting final score of the match (from full dataset, not just lineouts)
 last_play <- phase_data %>%
   group_by(Round, Home, Away) %>%
   filter(ID == max(ID)) %>%
@@ -58,6 +51,13 @@ last_play <- phase_data %>%
     Final_Points_Diff_Home = if_else(Team_In_Poss == "Home",
                                      Final_Points_Difference,
                                      -Final_Points_Difference)
+  )
+
+# Keeping just first phases beginning with lineouts (after last_play so WinPct is correct)
+phase_data <- phase_data %>%
+  filter(
+    Play_Start == "Lineout",
+    Phase == 1
   )
 
 # making win percentage column
@@ -160,10 +160,16 @@ phase_data <- phase_data %>%
   ungroup()
 
 # Adding meter line of play start
+# Raw data Location column has explicit zone names (e.g. "5m-22m (own)", "10m-Half (own)").
+# Standard pitch: 0-100m try line to try line; 5m, 22m, 10m (each side of half), half at 50m.
 location_names <- c("5m-Goal (opp)", "22m-5m (opp)", "10m-22m (opp)",
                     "Half-10m (opp)","10m-Half (own)", "22m-10m (own)",
                     "5m-22m (own)", "Goal-5m (own)")
 location_meters <- c(2.5, 13.5, 31, 45, 55, 69, 86.5, 97.5)
+
+# Explicit zone boundaries: y = distance (m) from *opponents'* try line (the goal we're attacking).
+# So 0 = on their line, 100 = on our line. Matches Location ranges (5m/22m/10m/half).
+zone_boundaries_m <- c(0, 5, 22, 40, 50, 60, 78, 95, 100)
 
 lookup <- setNames(location_meters, location_names)
 
@@ -268,6 +274,18 @@ pred_data <- tibble(
 point_levels <- levels(sampled_phase_data$points_factor)
 point_values <- as.numeric(as.character(point_levels))
 
+get_probs_by_meter <- function(card_diff = 0, win_pct_diff = 0) {
+  pred <- tibble(
+    meter_line = meter_lines,
+    meter_line_factor = factor(meter_line, levels = levels(sampled_phase_data$meter_line_factor)),
+    Card_Diff = card_diff,
+    WinPct_Diff = win_pct_diff
+  )
+  pr <- predict(multinomial_model, newdata = pred, type = "probs")
+  if (is.vector(pr)) pr <- matrix(pr, nrow = 1)
+  pr
+}
+
 predict_lineout_ep <- function(meter_line, card_diff = 0, win_pct_diff = 0, model = multinomial_model) {
   new_data <- tibble(
     meter_line = meter_line,
@@ -310,11 +328,12 @@ plot_data <- tibble(
 )
 
 ep_by_meter_line <- ggplot(plot_data, aes(x = meter_line, y = expected_points)) +
-  geom_line(size = 1.2, color = "blue") +
+  geom_step(direction = "mid", linewidth = 1, color = "blue") +
+  geom_point(size = 3, color = "blue") +
   labs(
-    title = "Expected Points by Meter Line",
-    subtitle = "Multinomial model with Card_Diff = 0 and WinPct_Diff = 0",
-    x = "Meters from Try Line",
+    title = "Expected Points by Field Zone",
+    subtitle = "Multinomial model (zonal); estimates at discrete zones only. Card_Diff = 0, WinPct_Diff = 0",
+    x = "Zone (meters from try line)",
     y = "Expected Points"
   ) +
   theme_minimal(base_size = 14)
@@ -404,15 +423,14 @@ bootstrap_outputs <- list(
 
 saveRDS(bootstrap_outputs, "data/multinomial_cluster_bootstrap.rds")
 
-# Plotting EP with uncertainty bands
+# Plotting EP with uncertainty at each zone (discrete; no continuous curve)
 multi_ep_plot <- ggplot(results_multi_ci, aes(x = meter_line, y = expected_points)) +
-  geom_ribbon(aes(ymin = ep_lo_2_5, ymax = ep_hi_97_5), alpha = 0.2, fill = "steelblue") +
-  geom_line(size = 1, color = "steelblue") +
-  geom_point(size = 3, color = "steelblue") +
+  geom_linerange(aes(ymin = ep_lo_2_5, ymax = ep_hi_97_5), linewidth = 1.2, color = "steelblue") +
+  geom_point(size = 3.5, color = "steelblue") +
   labs(
-    title = "Expected Points by Meter Line (Multinomial + Cluster Bootstrap)",
-    subtitle = "95% CI from match-level resampling with within-run_id deduplication",
-    x = "Meter Line",
+    title = "Expected Points by Field Zone (Multinomial + Cluster Bootstrap)",
+    subtitle = "Estimates at discrete zones only. 95% CI from match-level resampling.",
+    x = "Zone (meters from try line)",
     y = "Expected Points"
   ) +
   theme_minimal()
@@ -453,7 +471,7 @@ compute_kicking_angle <- function(x, y, post_half_width = 2.81) {
 
 grid <- grid %>%
   mutate(
-    kicking_angle = compute_kicking_angle(x_vals, y, post_half_width),
+    kicking_angle = compute_kicking_angle(x, y, post_half_width),
     distance_to_center = sqrt(x^2 + y^2)
   )
 
@@ -513,12 +531,24 @@ ggsave("plots/kick_ep_plot.png", kick_ep_plot,
 plot_data <- plot_data %>%
   rename(lineout_ep = expected_points)
 
+# Multinomial gives EP only at discrete zones. No interpolation: assign y to a zone using
+# explicit boundaries from the data (Location ranges), then use that zone's model prediction.
+zone_for_y <- function(y) {
+  idx <- findInterval(y, zone_boundaries_m, rightmost.closed = TRUE)
+  idx <- pmin(pmax(idx, 1L), length(meter_lines))
+  meter_lines[idx]
+}
+lineout_ep_at_y <- function(y_new, card_diff = 0, win_pct_diff = 0) {
+  zone_meter <- zone_for_y(y_new)
+  predict_lineout_ep(zone_meter, card_diff, win_pct_diff, multinomial_model)
+}
+
 grid <- grid %>%
-  left_join(plot_data, by = c("y" = "meter_line")) %>%
   rename(kick_ep = expected_points) %>%
   mutate(
+    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0),
     point_diff = lineout_ep - kick_ep
-)
+  )
 
 # EP of Lineout minus EP of penalty kick
 # Uses multinomial lineout EP estimates with Card_Diff = 0 and WinPct_Diff = 0
@@ -687,25 +717,10 @@ ggsave("plots/delta_plot.png", delta_plot,
 
 y_shift <- -20
 
-meter_seq <- seq(0, 100, by = 1)
-
-plot_data <- tibble(
-  meter_line = meter_seq,
-  expected_points = predict_lineout_ep(meter_seq, card_diff = 0, win_pct_diff = 0)
-)
-
-scenario_max_lineout_ep <- max(plot_data$expected_points)
-
 grid_scenario <- grid %>%
-  select(-lineout_ep) %>%
-  left_join(plot_data, by = c("y" = "meter_line")) %>%
-  rename(lineout_ep = expected_points)
-
-grid_scenario <- grid_scenario %>%
   mutate(
-    lineout_ep_shifted = pmin(lineout_ep, max(lineout_ep)),
-    lineout_ep_shifted = approx(y, lineout_ep, xout = y + y_shift, rule = 2)$y,
-    
+    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0),
+    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = 0),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
@@ -766,23 +781,10 @@ marker_values
 
 # Scenario 2 - Yellow Cards
 
-plot_data <- tibble(
-  meter_line = meter_seq,
-  expected_points = predict_lineout_ep(meter_seq, card_diff = 1, win_pct_diff = 0)
-)
-
-scenario_max_lineout_ep <- max(plot_data$expected_points)
-
 grid_scenario <- grid %>%
-  select(-lineout_ep) %>%
-  left_join(plot_data, by = c("y" = "meter_line")) %>%
-  rename(lineout_ep = expected_points)
-
-grid_scenario <- grid_scenario %>%
   mutate(
-    lineout_ep_shifted = pmin(lineout_ep, max(lineout_ep)),
-    lineout_ep_shifted = approx(y, lineout_ep, xout = y + y_shift, rule = 2)$y,
-    
+    lineout_ep = lineout_ep_at_y(y, card_diff = 1, win_pct_diff = 0),
+    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 1, win_pct_diff = 0),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
@@ -808,23 +810,10 @@ ggsave("plots/opponent_yellow.png", opponent_yellow,
        width = 10, height = 8, dpi = 300)
 
 
-plot_data <- tibble(
-  meter_line = meter_seq,
-  expected_points = predict_lineout_ep(meter_seq, card_diff = 0, win_pct_diff = 0)
-)
-
-scenario_max_lineout_ep <- max(plot_data$expected_points)
-
 grid_scenario <- grid %>%
-  select(-lineout_ep) %>%
-  left_join(plot_data, by = c("y" = "meter_line")) %>%
-  rename(lineout_ep = expected_points)
-
-grid_scenario <- grid_scenario %>%
   mutate(
-    lineout_ep_shifted = pmin(lineout_ep, max(lineout_ep)),
-    lineout_ep_shifted = approx(y, lineout_ep, xout = y + y_shift, rule = 2)$y,
-    
+    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0),
+    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = 0),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
@@ -851,23 +840,10 @@ ggsave("plots/no_yellow.png", no_yellow,
 
 
 
-plot_data <- tibble(
-  meter_line = meter_seq,
-  expected_points = predict_lineout_ep(meter_seq, card_diff = -1, win_pct_diff = 0)
-)
-
-scenario_max_lineout_ep <- max(plot_data$expected_points)
-
 grid_scenario <- grid %>%
-  select(-lineout_ep) %>%
-  left_join(plot_data, by = c("y" = "meter_line")) %>%
-  rename(lineout_ep = expected_points)
-
-grid_scenario <- grid_scenario %>%
   mutate(
-    lineout_ep_shifted = pmin(lineout_ep, max(lineout_ep)),
-    lineout_ep_shifted = approx(y, lineout_ep, xout = y + y_shift, rule = 2)$y,
-    
+    lineout_ep = lineout_ep_at_y(y, card_diff = -1, win_pct_diff = 0),
+    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = -1, win_pct_diff = 0),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
@@ -895,23 +871,10 @@ ggsave("plots/own_yellow.png", own_yellow,
 
 # Scenario 3 - Team Quality
 
-plot_data <- tibble(
-  meter_line = meter_seq,
-  expected_points = predict_lineout_ep(meter_seq, card_diff = 0, win_pct_diff = -0.25)
-)
-
-scenario_max_lineout_ep <- max(plot_data$expected_points)
-
 grid_scenario <- grid %>%
-  select(-lineout_ep) %>%
-  left_join(plot_data, by = c("y" = "meter_line")) %>%
-  rename(lineout_ep = expected_points)
-
-grid_scenario <- grid_scenario %>%
   mutate(
-    lineout_ep_shifted = pmin(lineout_ep, max(lineout_ep)),
-    lineout_ep_shifted = approx(y, lineout_ep, xout = y + y_shift, rule = 2)$y,
-    
+    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = -0.25),
+    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = -0.25),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
@@ -938,23 +901,10 @@ ggsave("plots/bad_team.png", bad_team,
 
 
 
-plot_data <- tibble(
-  meter_line = meter_seq,
-  expected_points = predict_lineout_ep(meter_seq, card_diff = 0, win_pct_diff = 0.25)
-)
-
-scenario_max_lineout_ep <- max(plot_data$expected_points)
-
 grid_scenario <- grid %>%
-  select(-lineout_ep) %>%
-  left_join(plot_data, by = c("y" = "meter_line")) %>%
-  rename(lineout_ep = expected_points)
-
-grid_scenario <- grid_scenario %>%
   mutate(
-    lineout_ep_shifted = pmin(lineout_ep, max(lineout_ep)),
-    lineout_ep_shifted = approx(y, lineout_ep, xout = y + y_shift, rule = 2)$y,
-    
+    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0.25),
+    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = 0.25),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
@@ -995,25 +945,12 @@ sep_game_data_csv <- sep_game_data_csv %>%
     y = y
   )
 
-# Rows without cards
-
-plot_data <- tibble(
-  meter_line = meter_seq,
-  expected_points = predict_lineout_ep(meter_seq, card_diff = 0, win_pct_diff = 0)
-)
-
-scenario_max_lineout_ep <- max(plot_data$expected_points)
+# Rows without cards (Card_Diff = 0, WinPct_Diff = 0)
 
 grid_scenario <- grid %>%
-  select(-lineout_ep) %>%
-  left_join(plot_data, by = c("y" = "meter_line")) %>%
-  rename(lineout_ep = expected_points)
-
-grid_scenario <- grid_scenario %>%
   mutate(
-    lineout_ep_shifted = pmin(lineout_ep, max(lineout_ep)),
-    lineout_ep_shifted = approx(y, lineout_ep, xout = y + y_shift, rule = 2)$y,
-    
+    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0),
+    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = 0),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
