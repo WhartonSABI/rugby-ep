@@ -9,17 +9,18 @@ source("scripts/02_ep-lineout.R")
 # 1) resample matches with replacement
 # 2) within each sampled match, sample exactly one row per run_id
 boot_B <- as.integer(Sys.getenv("EP_BOOT_B", unset = "2000"))
+n_cores <- as.integer(Sys.getenv("EP_BOOT_CORES", unset = NA_character_))
+if (is.na(n_cores)) n_cores <- min(12, max(1L, parallel::detectCores() - 1L))
+message("Bootstrap: B = ", boot_B, ", cores = ", n_cores)
 
 match_keys <- phase_data %>%
   distinct(Round, Home, Away)
 
 n_matches <- nrow(match_keys)
+meter_line_levels <- levels(sampled_phase_data$meter_line_factor)
 
-coef_boot <- vector("list", boot_B)
-ep_boot <- matrix(NA_real_, nrow = boot_B, ncol = nrow(pred_data))
-colnames(ep_boot) <- as.character(pred_data$meter_line)
-
-for (b in seq_len(boot_B)) {
+# One bootstrap replicate (runs in parallel workers)
+one_boot <- function(b) {
   sampled_match_idx <- sample.int(n_matches, size = n_matches, replace = TRUE)
   sampled_matches <- match_keys[sampled_match_idx, ] %>%
     mutate(boot_match_id = row_number())
@@ -31,7 +32,7 @@ for (b in seq_len(boot_B)) {
     ungroup() %>%
     mutate(
       points_factor = factor(points, levels = point_levels),
-      meter_line_factor = factor(meter_line, levels = levels(sampled_phase_data$meter_line_factor))
+      meter_line_factor = factor(meter_line, levels = meter_line_levels)
     )
 
   boot_fit <- try(
@@ -44,17 +45,26 @@ for (b in seq_len(boot_B)) {
   )
 
   if (inherits(boot_fit, "try-error")) {
-    next
+    return(list(coef = NULL, ep_row = rep(NA_real_, nrow(pred_data))))
   }
 
   boot_probs <- predict(boot_fit, newdata = pred_data, type = "probs")
   if (is.vector(boot_probs)) {
     boot_probs <- matrix(boot_probs, nrow = 1)
   }
-
-  ep_boot[b, ] <- as.vector(boot_probs %*% point_values)
-  coef_boot[[b]] <- coef(boot_fit)
+  ep_row <- as.vector(boot_probs %*% point_values)
+  list(coef = coef(boot_fit), ep_row = ep_row)
 }
+
+boot_results <- parallel::mclapply(
+  seq_len(boot_B),
+  one_boot,
+  mc.cores = n_cores
+)
+
+coef_boot <- lapply(boot_results, `[[`, "coef")
+ep_boot <- do.call(rbind, lapply(boot_results, `[[`, "ep_row"))
+colnames(ep_boot) <- as.character(pred_data$meter_line)
 
 ep_ci <- apply(
   ep_boot,
