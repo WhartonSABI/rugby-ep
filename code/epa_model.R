@@ -279,33 +279,42 @@ ggsave("plots/ep_by_meter_line.png", ep_by_meter_line,
 ##############################
 
 # Ensure variables are properly formatted
-sampled_phase_data$points <- factor(sampled_phase_data$points)
-sampled_phase_data$meter_line <- factor(sampled_phase_data$meter_line)
+sampled_phase_data <- sampled_phase_data %>%
+  mutate(
+    points_factor = factor(points),
+    meter_line_factor = factor(meter_line)
+  )
 
-# Multinomial regression
-multinomial_model <- multinom(points ~ meter_line + Card_Diff + WinPct_Diff,
-                              data = sampled_phase_data)
+# Multinomial regression (point estimate)
+multinomial_model <- nnet::multinom(
+  points_factor ~ meter_line_factor + Card_Diff + WinPct_Diff,
+  data = sampled_phase_data,
+  trace = FALSE
+)
 
 summary(multinomial_model)
 
-# Calc expected points at each meter line
-meter_lines <- unique(sampled_phase_data$meter_line)
-pred_data <- data.frame(
+# Prediction grid for expected points by meter line
+meter_lines <- sort(unique(sampled_phase_data$meter_line))
+pred_data <- tibble(
   meter_line = meter_lines,
+  meter_line_factor = factor(meter_line, levels = levels(sampled_phase_data$meter_line_factor)),
   Card_Diff = mean(sampled_phase_data$Card_Diff, na.rm = TRUE),
   WinPct_Diff = mean(sampled_phase_data$WinPct_Diff, na.rm = TRUE)
 )
 
+point_levels <- levels(sampled_phase_data$points_factor)
+point_values <- as.numeric(as.character(point_levels))
+
 # Get predicted probabilities
 probs_multi <- predict(multinomial_model, newdata = pred_data, type = "probs")
 
-# Convert to data frame if needed
+# Convert to matrix if needed
 if (is.vector(probs_multi)) {
   probs_multi <- matrix(probs_multi, nrow = 1)
 }
 
 # Calculate expected points
-point_values <- as.numeric(as.character(levels(sampled_phase_data$points)))
 expected_points_multi <- probs_multi %*% point_values
 
 results_multi <- data.frame(
@@ -314,17 +323,106 @@ results_multi <- data.frame(
   probs_multi
 )
 
-print("Expected Points by Meter Line:")
+print("Expected Points by Meter Line (point estimate):")
 print(results_multi)
 
-# Plotting EP
-ggplot(results_multi, aes(x = meter_line, y = expected_points, group = 1)) +
+#########################
+### Cluster Bootstrap ###
+#########################
+
+# Brill et al. (2025) style clustered bootstrap:
+# 1) resample matches with replacement
+# 2) within each sampled match, sample exactly one row per run_id
+boot_B <- as.integer(Sys.getenv("EP_BOOT_B", unset = "2000"))
+
+match_keys <- phase_data %>%
+  distinct(Round, Home, Away)
+
+n_matches <- nrow(match_keys)
+
+coef_boot <- vector("list", boot_B)
+ep_boot <- matrix(NA_real_, nrow = boot_B, ncol = nrow(pred_data))
+colnames(ep_boot) <- as.character(pred_data$meter_line)
+
+for (b in seq_len(boot_B)) {
+  sampled_match_idx <- sample.int(n_matches, size = n_matches, replace = TRUE)
+  sampled_matches <- match_keys[sampled_match_idx, ] %>%
+    mutate(boot_match_id = row_number())
+
+  boot_sample <- sampled_matches %>%
+    left_join(phase_data, by = c("Round", "Home", "Away")) %>%
+    group_by(boot_match_id, run_id) %>%
+    slice_sample(n = 1) %>%
+    ungroup() %>%
+    mutate(
+      points_factor = factor(points, levels = point_levels),
+      meter_line_factor = factor(meter_line, levels = levels(sampled_phase_data$meter_line_factor))
+    )
+
+  boot_fit <- try(
+    nnet::multinom(
+      points_factor ~ meter_line_factor + Card_Diff + WinPct_Diff,
+      data = boot_sample,
+      trace = FALSE
+    ),
+    silent = TRUE
+  )
+
+  if (inherits(boot_fit, "try-error")) {
+    next
+  }
+
+  boot_probs <- predict(boot_fit, newdata = pred_data, type = "probs")
+  if (is.vector(boot_probs)) {
+    boot_probs <- matrix(boot_probs, nrow = 1)
+  }
+
+  ep_boot[b, ] <- as.vector(boot_probs %*% point_values)
+  coef_boot[[b]] <- coef(boot_fit)
+}
+
+ep_ci <- apply(
+  ep_boot,
+  2,
+  quantile,
+  probs = c(0.025, 0.975),
+  na.rm = TRUE
+)
+
+results_multi_ci <- tibble(
+  meter_line = pred_data$meter_line,
+  expected_points = as.vector(expected_points_multi),
+  ep_lo_2_5 = ep_ci[1, ],
+  ep_hi_97_5 = ep_ci[2, ]
+)
+
+print("Expected Points by Meter Line with 95% Bootstrap CI:")
+print(results_multi_ci)
+
+bootstrap_outputs <- list(
+  point_estimate_model = multinomial_model,
+  bootstrap_coefficients = coef_boot,
+  expected_points_bootstrap = ep_boot,
+  expected_points_summary = results_multi_ci
+)
+
+saveRDS(bootstrap_outputs, "data/multinomial_cluster_bootstrap.rds")
+
+# Plotting EP with uncertainty bands
+multi_ep_plot <- ggplot(results_multi_ci, aes(x = meter_line, y = expected_points)) +
+  geom_ribbon(aes(ymin = ep_lo_2_5, ymax = ep_hi_97_5), alpha = 0.2, fill = "steelblue") +
   geom_line(size = 1, color = "steelblue") +
   geom_point(size = 3, color = "steelblue") +
-  labs(title = "Expected Points by Meter Line",
-       x = "Meter Line",
-       y = "Expected Points") +
+  labs(
+    title = "Expected Points by Meter Line (Multinomial + Cluster Bootstrap)",
+    subtitle = "95% CI from match-level resampling with within-run_id deduplication",
+    x = "Meter Line",
+    y = "Expected Points"
+  ) +
   theme_minimal()
+
+ggsave("plots/multinomial_ep_bootstrap_ci.png", multi_ep_plot,
+       width = 10, height = 8, dpi = 300)
 
 ###############################
 ### KICKING EXPECTED POINTS ###
