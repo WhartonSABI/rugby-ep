@@ -3,10 +3,11 @@
 ###########################
 
 # for literature
-papers
+literature/
+
 # jp's sandbox
 jp/
-jp.R
+jp.*
 
 # finder tracker
 .DS_Store

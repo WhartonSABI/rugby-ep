@@ -421,7 +421,7 @@ multi_ep_plot <- ggplot(results_multi_ci, aes(x = meter_line, y = expected_point
   ) +
   theme_minimal()
 
-ggsave("plots/multinomial_ep_bootstrap_ci.png", multi_ep_plot,
+ggsave("plots/multinomial_bootstrap.png", multi_ep_plot,
        width = 10, height = 8, dpi = 300)
 
 ###############################
