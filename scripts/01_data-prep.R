@@ -1,6 +1,6 @@
-#####################
+#############
 ### SETUP ###
-#####################
+#############
 
 # load libraries
 
@@ -14,18 +14,18 @@ library(tidyverse)
 # set seed
 set.seed(11-19-2025)
 
-###############################
+#######################
 ### PHASE DATA LOAD ###
-###############################
+#######################
 
 # run from project root
 phase_data = read_csv("data/phase_2018-19.csv")
 # preview data
 head(phase_data)
 
-#################################
+#########################
 ### LINEOUT DATA PREP ###
-#################################
+#########################
 
 phase_data <- phase_data %>%
   mutate(
@@ -179,9 +179,9 @@ sampled_phase_data <- phase_data %>%
   slice_sample(n = 1) %>% 
   ungroup()
 
-#####################
+#############
 ### PLOTS ###
-#####################
+#############
 
 # meter line
 meter_line_marginal <- ggplot(sampled_phase_data, aes(x = meter_line, y = points)) +

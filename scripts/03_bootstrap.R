@@ -1,9 +1,9 @@
 # run from project root; depends on 02_ep-lineout.R
 source("scripts/02_ep-lineout.R")
 
-#################################
-### Cluster Bootstrap ###
-#################################
+###########################
+### CLUSTERED BOOTSTRAP ###
+###########################
 
 # clustered bootstrap
 # 1) resample matches with replacement

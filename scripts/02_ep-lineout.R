@@ -1,9 +1,9 @@
 # run from project root; depends on 01_data-prep.R
 source("scripts/01_data-prep.R")
 
-######################################
-### Categorical Regression ###
-######################################
+##############################
+### CATEGORICAL REGRESSION ###
+##############################
 
 # format variables
 sampled_phase_data <- sampled_phase_data %>%

@@ -2,9 +2,9 @@
 source("scripts/02_ep-lineout.R")
 source("scripts/04_ep-kick.R")
 
-#################################
+#########################
 ### MAKING A DECISION ###
-#################################
+#########################
 
 # expected point difference across pitch
 
@@ -91,9 +91,9 @@ for (shift in y_shifts) {
          p, width = 10, height = 8, dpi = 300)
 }
 
-##############################
+######################
 ### LINEOUT SHIFTS ###
-##############################
+######################
 
 marker_x <- 20
 marker_y <- 30

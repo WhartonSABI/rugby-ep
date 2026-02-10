@@ -1,9 +1,9 @@
 # run from project root; depends on 05_decisions.R
 source("scripts/05_decisions.R")
 
-##################################
+##########################
 ### SITUATION ANALYSIS ###
-##################################
+##########################
 
 # scenario 1: no card or win percentage difference
 
@@ -226,9 +226,9 @@ good_team <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
 ggsave("plots/good_team.png", good_team,
        width = 10, height = 8, dpi = 300)
 
-#############################################
-### South Africa v.s. New Zealand ###
-#############################################
+####################################
+### SOUTH AFRICA VS. NEW ZEALAND ###
+####################################
 
 sep_game_data_csv = read_csv("data/All Blacks vs South Africa Game Sep 16th.csv")
 
@@ -306,9 +306,9 @@ summary_metrics <- table_ep %>%
 print(summary_metrics)
 
 
-##########################
+##################
 ### REFERENCES ###
-##########################
+##################
 
 # article links
 # https://www.data-ruck.com/blog/predicting-kicks-outcome/
