@@ -2,9 +2,9 @@
 library(mgcv)
 library(tidyverse)
 
-#######################################
+###############################
 ### KICKING EXPECTED POINTS ###
-#######################################
+###############################
 
 # gam model for kick percentage
 
