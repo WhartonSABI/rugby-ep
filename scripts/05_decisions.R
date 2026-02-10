@@ -1,16 +1,17 @@
-# Run from project root. Depends on 02_ep-lineout.R and 04_ep-kick.R.
+# run from project root; depends on 02_ep-lineout.R and 04_ep-kick.R
 source("scripts/02_ep-lineout.R")
 source("scripts/04_ep-kick.R")
 
-#########################
+#################################
 ### MAKING A DECISION ###
-#########################
+#################################
 
-# Plotting Difference in Expected Points Across Pitch
+# expected point difference across pitch
 
 plot_data <- plot_data %>%
   rename(lineout_ep = expected_points)
 
+# lineout ep lookup with clipping to observed meter range
 lineout_ep_at_y <- function(y_new, card_diff = 0, win_pct_diff = 0) {
   smoother <- build_lineout_smoother(card_diff = card_diff, win_pct_diff = win_pct_diff)
   y_clipped <- pmin(pmax(y_new, min(meter_lines)), max(meter_lines))
@@ -45,12 +46,14 @@ no_shift_plot <- ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
 ggsave("plots/no_shift_plot.png", no_shift_plot,
        width = 10, height = 8, dpi = 300)
 
-# Shifting location of lineout forward
+# evaluate fixed y-shift scenarios
+# shift lineout location forward
 
 max_lineout_ep <- max(grid$lineout_ep)
 
 y_shifts <- c(0, -5, -10, -15, -20, -25)
 
+# generate point-difference heatmaps for each shift
 for (shift in y_shifts) {
   grid_shifted <- grid %>%
     mutate(y_shifted = y + shift) %>%
@@ -88,15 +91,17 @@ for (shift in y_shifts) {
          p, width = 10, height = 8, dpi = 300)
 }
 
-######################
+##############################
 ### LINEOUT SHIFTS ###
-######################
+##############################
 
 marker_x <- 20
 marker_y <- 30
 
+# test incremental shifts at a fixed marker location
 y_shifts <- seq(0, -30, by = -1)
 
+# collect kick and lineout ep by shift
 shift_results <- lapply(y_shifts, function(shift) {
   grid_shifted <- grid %>%
     mutate(y_shifted = y + shift) %>%
@@ -126,6 +131,7 @@ shift_results <- lapply(y_shifts, function(shift) {
   bind_rows()
 
 shift_results_long <- shift_results %>%
+# reshape for plotting
   tidyr::pivot_longer(
     cols = c(kick_EP, lineout_EP),
     names_to = "Option",
@@ -138,11 +144,13 @@ shift_results_long <- shift_results %>%
   )
 
 shift_results_long <- shift_results_long %>%
+# convert shift sign for chart readability
   mutate(y_shift_plot = -y_shift)
 
 shift_intercept <- -with(shift_results,
                    y_shifts[which.min(abs(kick_EP - lineout_EP))])
 
+# plot break-even shift at marker location
 delta_plot <- ggplot(shift_results_long,
                      aes(x = y_shift_plot, y = Expected_Points, color = Option)) +
   geom_line(linewidth = 1.2) +

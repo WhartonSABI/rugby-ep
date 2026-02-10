@@ -1,18 +1,18 @@
-# Run from project root. Depends on 01_data-prep.R.
+# run from project root; depends on 01_data-prep.R
 source("scripts/01_data-prep.R")
 
-##############################
+######################################
 ### Categorical Regression ###
-##############################
+######################################
 
-# Ensure variables are properly formatted
+# format variables
 sampled_phase_data <- sampled_phase_data %>%
   mutate(
     points_factor = factor(points),
     meter_line_factor = factor(meter_line)
   )
 
-# Multinomial regression (point estimate)
+# multinomial regression
 multinomial_model <- nnet::multinom(
   points_factor ~ meter_line_factor + Card_Diff + WinPct_Diff,
   data = sampled_phase_data,
@@ -21,7 +21,7 @@ multinomial_model <- nnet::multinom(
 
 summary(multinomial_model)
 
-# Prediction grid for expected points by meter line
+# prediction grid by meter line
 meter_lines <- sort(unique(sampled_phase_data$meter_line))
 pred_data <- tibble(
   meter_line = meter_lines,
@@ -33,6 +33,7 @@ pred_data <- tibble(
 point_levels <- levels(sampled_phase_data$points_factor)
 point_values <- as.numeric(as.character(point_levels))
 
+# helper: return class probabilities across meter lines
 get_probs_by_meter <- function(card_diff = 0, win_pct_diff = 0) {
   pred <- tibble(
     meter_line = meter_lines,
@@ -45,6 +46,7 @@ get_probs_by_meter <- function(card_diff = 0, win_pct_diff = 0) {
   pr
 }
 
+# helper: return expected points from predicted probabilities
 predict_lineout_ep <- function(meter_line, card_diff = 0, win_pct_diff = 0, model = multinomial_model) {
   new_data <- tibble(
     meter_line = meter_line,
@@ -61,15 +63,15 @@ predict_lineout_ep <- function(meter_line, card_diff = 0, win_pct_diff = 0, mode
   as.vector(probs %*% point_values)
 }
 
-# Get predicted probabilities
+# predicted probabilities
 probs_multi <- predict(multinomial_model, newdata = pred_data, type = "probs")
 
-# Convert to matrix if needed
+# convert to matrix if needed
 if (is.vector(probs_multi)) {
   probs_multi <- matrix(probs_multi, nrow = 1)
 }
 
-# Calculate expected points
+# expected points
 expected_points_multi <- probs_multi %*% point_values
 
 results_multi <- data.frame(
@@ -81,13 +83,15 @@ results_multi <- data.frame(
 print("Expected Points by Meter Line (point estimate):")
 print(results_multi)
 
-# plot_data: zone centers (used for interpolation, 05_rest)
+# baseline ep at zone centers
+# zone centers for interpolation
 plot_data <- tibble(
   meter_line = meter_lines,
   expected_points = predict_lineout_ep(meter_lines, card_diff = 0, win_pct_diff = 0)
 )
 
 build_lineout_smoother <- function(card_diff = 0, win_pct_diff = 0) {
+# helper: monotone smoother over zone-level ep
   ep_zone <- predict_lineout_ep(
     meter_lines,
     card_diff = card_diff,
@@ -100,7 +104,7 @@ build_lineout_smoother <- function(card_diff = 0, win_pct_diff = 0) {
   splinefun(iso_fit$x, -iso_fit$yf, method = "monoH.FC")
 }
 
-# EP by meter line: interpolated (smooth) estimate only
+# interpolated ep by meter line
 ep_by_meter_line_data <- plot_data %>%
   mutate(expected_points = build_lineout_smoother()(meter_line))
 

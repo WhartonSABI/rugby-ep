@@ -1,14 +1,15 @@
-# Run from project root. Depends on 05_decisions.R.
+# run from project root; depends on 05_decisions.R
 source("scripts/05_decisions.R")
 
-##########################
+##################################
 ### SITUATION ANALYSIS ###
-##########################
+##################################
 
-# Scenario 1 - No Card or Win Percentage Difference
+# scenario 1: no card or win percentage difference
 
 y_shift <- -20
 
+# build baseline shifted lineout minus kick surface
 grid_scenario <- grid %>%
   mutate(
     lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0),
@@ -16,7 +17,7 @@ grid_scenario <- grid %>%
     point_diff = lineout_ep_shifted - kick_ep
   )
 
-# Baseline scenario
+# baseline scenario
 baseline_points_diff <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
@@ -38,7 +39,7 @@ baseline_points_diff <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_dif
 ggsave("plots/baseline_points_diff.png", baseline_points_diff,
        width = 10, height = 8, dpi = 300)
 
-# Baseline scenario with marker
+# baseline scenario with marker
 
 marker_x <- 20
 marker_y <- 30
@@ -65,13 +66,14 @@ baseline_with_marker <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_dif
 ggsave("plots/baseline_with_marker.png", baseline_with_marker,
        width = 10, height = 8, dpi = 300)
 
+# inspect ep values at marker point
 marker_values <- grid_scenario %>%
   filter(x == marker_x, y == marker_y) %>%
   select(point_diff, kick_ep, lineout_ep_shifted)
 
 marker_values
 
-# Scenario 2 - Yellow Cards
+# scenario 2: yellow cards
 
 grid_scenario <- grid %>%
   mutate(
@@ -80,7 +82,7 @@ grid_scenario <- grid %>%
     point_diff = lineout_ep_shifted - kick_ep
   )
 
-# Opponent has yellow card
+# opponent yellow card
 opponent_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
@@ -102,6 +104,7 @@ ggsave("plots/opponent_yellow.png", opponent_yellow,
        width = 10, height = 8, dpi = 300)
 
 
+# reset to neutral card state
 grid_scenario <- grid %>%
   mutate(
     lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0),
@@ -109,7 +112,7 @@ grid_scenario <- grid %>%
     point_diff = lineout_ep_shifted - kick_ep
   )
 
-# No difference in yellow cards
+# no yellow card difference
 no_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
@@ -131,6 +134,7 @@ ggsave("plots/no_yellow.png", no_yellow,
        width = 10, height = 8, dpi = 300)
 
 
+# set own yellow card disadvantage
 
 grid_scenario <- grid %>%
   mutate(
@@ -139,7 +143,7 @@ grid_scenario <- grid %>%
     point_diff = lineout_ep_shifted - kick_ep
   )
 
-# You have a yellow card
+# own yellow card
 own_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
@@ -161,7 +165,7 @@ ggsave("plots/own_yellow.png", own_yellow,
        width = 10, height = 8, dpi = 300)
 
 
-# Scenario 3 - Team Quality
+# scenario 3: team quality
 
 grid_scenario <- grid %>%
   mutate(
@@ -170,7 +174,7 @@ grid_scenario <- grid %>%
     point_diff = lineout_ep_shifted - kick_ep
   )
 
-# Bad team
+# lower-quality team
 bad_team <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
@@ -192,6 +196,7 @@ ggsave("plots/bad_team.png", bad_team,
        width = 10, height = 8, dpi = 300)
 
 
+# set higher win percentage differential
 
 grid_scenario <- grid %>%
   mutate(
@@ -200,7 +205,7 @@ grid_scenario <- grid %>%
     point_diff = lineout_ep_shifted - kick_ep
   )
 
-# Good team
+# higher-quality team
 good_team <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
@@ -221,12 +226,13 @@ good_team <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
 ggsave("plots/good_team.png", good_team,
        width = 10, height = 8, dpi = 300)
 
-#####################################
+#############################################
 ### South Africa v.s. New Zealand ###
-#####################################
+#############################################
 
 sep_game_data_csv = read_csv("data/All Blacks vs South Africa Game Sep 16th.csv")
 
+# align game coordinates with model grid
 sep_game_data_csv <- sep_game_data_csv %>%
   rename(
     x = `x location`,
@@ -237,7 +243,7 @@ sep_game_data_csv <- sep_game_data_csv %>%
     y = y
   )
 
-# Rows without cards (Card_Diff = 0, WinPct_Diff = 0)
+# rows with Card_Diff = 0 and WinPct_Diff = 0
 
 grid_scenario <- grid %>%
   mutate(
@@ -247,39 +253,39 @@ grid_scenario <- grid %>%
   )
 
 data_with_ep <- sep_game_data_csv %>%
-  # Join lineout EP based on shifted y
+  # join lineout ep on shifted y
   left_join(
     grid_scenario %>% select(x, y, lineout_ep),
     by = c("x" = "x", "distance_from_try_after_shift" = "y")
   ) %>%
-  # Join kick EP based on original y
+  # join kick ep on original y
   left_join(
     grid_scenario %>% select(x, y, kick_ep),
     by = c("x" = "x", "y" = "y")
   ) %>%
   mutate(
-    # difference between lineout and kick, including card differential effect
+    # lineout minus kick
     point_diff = lineout_ep - kick_ep
   )
 
 table_ep <- data_with_ep %>%
   mutate(
-    # Determine optimal decision: lineout if point_diff > 0, else kick
+    # optimal decision: lineout if point_diff > 0, else kick
     optimal_decision = ifelse(point_diff > 0, "lineout", "kick")
   ) %>%
   select(
     Team,             # team in possession
-    lineout_ep,       # expected points if choosing lineout
-    kick_ep,          # expected points if choosing kick
-    Decision,         # actual decision taken
-    optimal_decision  # optimal decision based on EP
+    lineout_ep,       # expected points for lineout
+    kick_ep,          # expected points for kick
+    Decision,         # actual decision
+    optimal_decision  # ep-optimal decision
   ) %>%
   mutate(
-    # EP for optimal and actual decision
+    # ep for optimal and actual decisions
     EP_optimal = ifelse(optimal_decision == "lineout", lineout_ep, kick_ep),
     EP_actual  = ifelse(Decision == "lineout", lineout_ep, kick_ep),
 
-    # Difference: optimal - actual
+    # absolute difference: optimal vs actual
     ep_diff = abs(EP_optimal - EP_actual)
   )
 
@@ -288,6 +294,7 @@ table_ep <- table_ep %>%
     Team = recode(Team, "AB" = "NZ")
   )
 
+# summarize decision efficiency
 table_ep
 
 summary_metrics <- table_ep %>%
@@ -299,16 +306,16 @@ summary_metrics <- table_ep %>%
 print(summary_metrics)
 
 
-##################
+##########################
 ### REFERENCES ###
-##################
+##########################
 
-## Links to Article
+# article links
 # https://www.data-ruck.com/blog/predicting-kicks-outcome/
 # https://journals.sagepub.com/doi/10.1177/22150218251365220
 
-## Data Download Link
+# data download link
 # https://zenodo.org/api/records/13851563/files-archive
 
-# Goal Kicking Data
+# goal kicking data
 # https://www.sciencedirect.com/science/article/pii/S1440244014000255

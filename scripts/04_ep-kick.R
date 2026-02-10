@@ -1,23 +1,25 @@
-# Run from project root. Standalone (loads GAM from data/).
+# run from project root; standalone (loads GAM from data/)
 library(mgcv)
 library(tidyverse)
 
-###############################
+#######################################
 ### KICKING EXPECTED POINTS ###
-###############################
+#######################################
 
-# GAM Model for Kick Percentage
+# gam model for kick percentage
 
 saved_gam <- readRDS("data/gam_model.rds")
 
+# expected points assumptions
 exp_points_on_miss <- 0.76
 exp_points_on_success <- 3
 
-# Pitch grid values
+# pitch grid
 x_vals <- seq(-35, 35, by = 1)
 y_vals <- seq(5, 60, by = 1)
 grid <- expand.grid(x = x_vals, y = y_vals)
 
+# post half-width in meters
 post_half_width <- 2.81
 
 compute_kicking_angle <- function(x, y, post_half_width = 2.81) {
@@ -34,19 +36,22 @@ compute_kicking_angle <- function(x, y, post_half_width = 2.81) {
 }
 
 grid <- grid %>%
+# derive geometric features for GAM prediction
   mutate(
     kicking_angle = compute_kicking_angle(x, y, post_half_width),
     distance_to_center = sqrt(x^2 + y^2)
   )
 
+# predict kick success probability
 grid$prob <- predict(saved_gam,
                      newdata = grid %>% select(kicking_angle, distance_to_center),
                      type = "response")
 
+# convert probability to expected points
 grid <- grid %>%
   mutate(expected_points = prob * exp_points_on_success + (1 - prob) * exp_points_on_miss)
 
-# Plotting probability of successful penalty kick
+# kick success probability
 
 thresholds <- c(0.8, 0.6, 0.4, 0.2)
 
@@ -68,7 +73,7 @@ kick_prob_plot <- ggplot(grid, aes(x = x, y = y, fill = prob)) +
 
 ggsave("plots/kick_prob_plot.png", kick_prob_plot, width = 10, height = 8, dpi = 300)
 
-# Expected Points of a Penalty Kick
+# expected points for penalty kick
 
 kick_ep_plot <- ggplot(grid, aes(x = x, y = y, fill = expected_points)) +
   geom_tile() +
