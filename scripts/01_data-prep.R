@@ -143,7 +143,6 @@ phase_data <- phase_data %>%
   )
 
 # flag under 2 minutes
-
 phase_data <- phase_data %>%
   mutate(
     Less_Than_2_Min = if_else(Seconds_Remaining_Half < 120, 1, 0)
