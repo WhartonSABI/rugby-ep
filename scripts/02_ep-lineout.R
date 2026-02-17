@@ -21,6 +21,9 @@ multinomial_model <- nnet::multinom(
 
 summary(multinomial_model)
 
+library(broom)
+multinomial_summary <- tidy(multinomial_model, conf.int = TRUE)
+
 # prediction grid by meter line
 meter_lines <- sort(unique(sampled_phase_data$meter_line))
 pred_data <- tibble(
@@ -121,3 +124,4 @@ ep_by_meter_line <- ggplot(ep_by_meter_line_data, aes(x = meter_line, y = expect
 
 ggsave("plots/ep_by_meter_line.png", ep_by_meter_line,
        width = 10, height = 8, dpi = 300)
+
