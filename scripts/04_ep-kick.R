@@ -1,14 +1,82 @@
 # run from project root; standalone (loads GAM from data/)
 library(mgcv)
 library(tidyverse)
+library(tidyr)
+library(dplyr)
 
 ###############################
 ### KICKING EXPECTED POINTS ###
 ###############################
 
-# gam model for kick percentage
+# Load in Penalty Estimated Success Prob
 
-saved_gam <- readRDS("data/gam_model.rds")
+kick_estimates <- read.csv("data/Modeled_Kick_Estimates.csv")
+
+# Set proper column names from row 1
+colnames(kick_estimates) <- c("try_line", kick_estimates[1, -1])
+kick_estimates <- kick_estimates[-1, ] %>%
+  pivot_longer(cols = -try_line, names_to = "touchline", values_to = "estimate") %>%
+  filter(estimate != "" & !is.na(estimate) & estimate != " ") %>%
+  mutate(
+    try_line  = gsub("^0", "", try_line),
+    touchline = gsub("^0", "", touchline),
+    # Fix 0-5 band which becomes "-5" after stripping leading zero
+    touchline = ifelse(touchline == "-5", "0-5", touchline),
+    try_line  = ifelse(try_line  == "-5", "0-5", try_line),
+    prob    = as.numeric(trimws(gsub("\\s*\\(.*", "", estimate))),
+    ci_low  = as.numeric(gsub(".*\\((\\d+)-.*", "\\1", estimate)),
+    ci_high = as.numeric(gsub(".*-(\\d+)\\).*", "\\1", estimate)),
+    y = sapply(strsplit(try_line,  "-"), function(x) (as.numeric(x[1]) + as.numeric(x[2])) / 2),
+    x = sapply(strsplit(touchline, "-"), function(x) (as.numeric(x[1]) + as.numeric(x[2])) / 2)
+  ) %>%
+  select(try_line, touchline, prob, ci_low, ci_high, x, y)
+
+# --- Plot 1: Tile map with modelled probability ---
+p1 <- ggplot(kick_estimates, aes(x = x, y = y)) +
+  geom_tile(aes(fill = prob), colour = "white", width = 4.8, height = 4.8) +
+  geom_text(aes(label = paste0(prob, "%")), 
+            size = 2.5, colour = "white") +
+  scale_fill_gradientn(
+    colours = c("#d73027", "#fc8d59", "#fee090", "#91cf60", "#1a9850"),
+    limits = c(0, 100),
+    name = "Modelled\nprobability (%)"
+  ) +
+  scale_x_continuous(breaks = seq(2.5, 67.5, by = 5),
+                     labels = c("0-5","5-10","10-15","15-20","20-25","25-30",
+                                "30-35","35-40","40-45","45-50","50-55","55-60","60-65","65-70")) +
+  scale_y_reverse(breaks = seq(7.5, 62.5, by = 5),
+                  labels = c("5-10","10-15","15-20","20-25","25-30","30-35",
+                             "35-40","40-45","45-50","50-55","55-60","60-65")) +
+  labs(x = "Distance from left-hand touchline (m)",
+       y = "Distance from try line (m)",
+       title = "Penalty kick success probability",
+       subtitle = "Modelled probability (%)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p1
+
+# --- Plot 2: CI plot faceted by try line band ---
+p2 <- ggplot(kick_estimates, aes(x = x, y = prob)) +
+  geom_ribbon(aes(ymin = ci_low, ymax = ci_high), fill = "#91cf60", alpha = 0.3) +
+  geom_line(colour = "#1a9850", linewidth = 0.8) +
+  geom_point(colour = "#1a9850", size = 1.5) +
+  facet_wrap(~ try_line, ncol = 3) +
+  scale_x_continuous(breaks = seq(2.5, 67.5, by = 10)) +
+  scale_y_continuous(limits = c(0, 100), labels = function(x) paste0(x, "%")) +
+  labs(x = "Distance from left-hand touchline (m)",
+       y = "Success probability",
+       title = "Modelled probability with 90% CI",
+       subtitle = "Line = modelled probability, ribbon = 90% CI") +
+  theme_minimal() +
+  theme(strip.text = element_text(face = "bold"))
+
+p2
+
+
+#####################
+### Previous Code ###
+#####################
 
 # expected points assumptions
 exp_points_on_miss <- 0.76
