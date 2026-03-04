@@ -56,28 +56,17 @@ y_shifts <- c(0, -5, -10, -15, -20, -25)
 # generate point-difference heatmaps for each shift
 for (shift in y_shifts) {
   grid_shifted <- grid %>%
-    mutate(y_shifted = y + shift) %>%
-    left_join(
-      grid %>%
-        select(x, y, lineout_ep) %>%
-        rename(y_shifted = y, lineout_ep_shifted = lineout_ep),
-      by = c("x", "y_shifted")
-    ) %>%
     mutate(
-      lineout_ep_shifted = ifelse(is.na(lineout_ep_shifted),
-                                  max_lineout_ep,
-                                  lineout_ep_shifted),
+      lineout_ep_shifted = lineout_ep_at_y(y + shift, card_diff = 0, win_pct_diff = 0),
+      kick_ep = 3*predict(model, newdata = grid, type = "response"),
       point_diff = lineout_ep_shifted - kick_ep
     )
-
+  
   p <- ggplot(grid_shifted, aes(x = x, y = y, fill = point_diff)) +
     geom_raster(interpolate = TRUE) +
     scale_fill_gradient2(
-      low = "#E76F51",
-      mid = "white",
-      high = "#457B9D",
-      midpoint = 0,
-      name = "Lineout - Kick"
+      low = "#E76F51", mid = "white", high = "#457B9D",
+      midpoint = 0, name = "Lineout - Kick"
     ) +
     coord_fixed() +
     labs(
@@ -86,9 +75,9 @@ for (shift in y_shifts) {
       y = "Distance from goal line (m)"
     ) +
     theme_minimal(base_size = 14)
-
+  
   ggsave(paste0("plots/kick_vs_lineout_shift_", abs(shift), "m.png"),
-         p, width = 10, height = 8, dpi = 300)
+         plot = p, width = 10, height = 8, dpi = 300)
 }
 
 ######################
@@ -98,59 +87,42 @@ for (shift in y_shifts) {
 marker_x <- 20
 marker_y <- 30
 
-# test incremental shifts at a fixed marker location
 y_shifts <- seq(0, -30, by = -1)
 
-# collect kick and lineout ep by shift
+# get kick_ep at marker location
+marker_kick_ep <- 3 * predict(model, 
+                              newdata = data.frame(
+                                x = marker_x, 
+                                y = marker_y,
+                                angle = atan2(abs(marker_x - 35), marker_y) * (180 / pi),
+                                Distance = sqrt((marker_x - 35)^2 + marker_y^2)
+                              ), 
+                              type = "response")
+
 shift_results <- lapply(y_shifts, function(shift) {
-  grid_shifted <- grid %>%
-    mutate(y_shifted = y + shift) %>%
-    left_join(
-      grid %>%
-        select(x, y, lineout_ep) %>%
-        rename(y_shifted = y, lineout_ep_shifted = lineout_ep),
-      by = c("x", "y_shifted")
-    ) %>%
-    mutate(
-      lineout_ep_shifted = ifelse(is.na(lineout_ep_shifted),
-                                  max_lineout_ep,
-                                  lineout_ep_shifted)
-    )
-
-  marker_val <- grid_shifted %>%
-    mutate(dist = sqrt((x - marker_x)^2 + (y - marker_y)^2)) %>%
-    slice_min(dist, n = 1) %>%
-    select(kick_ep, lineout_ep_shifted)
-
   tibble(
     y_shift = shift,
-    kick_EP = marker_val$kick_ep,
-    lineout_EP = marker_val$lineout_ep_shifted
+    kick_EP = marker_kick_ep,  # fixed — kick is always from marker location
+    lineout_EP = pmin(lineout_ep_at_y(marker_y + shift, card_diff = 0, win_pct_diff = 0), max_lineout_ep)
   )
 }) %>%
   bind_rows()
 
+# rest of code unchanged
 shift_results_long <- shift_results %>%
-# reshape for plotting
   tidyr::pivot_longer(
     cols = c(kick_EP, lineout_EP),
     names_to = "Option",
     values_to = "Expected_Points"
   ) %>%
-  mutate(
-    Option = recode(Option,
-                    kick_EP = "Kick",
-                    lineout_EP = "Lineout")
-  )
+  mutate(Option = recode(Option, kick_EP = "Kick", lineout_EP = "Lineout"))
 
 shift_results_long <- shift_results_long %>%
-# convert shift sign for chart readability
   mutate(y_shift_plot = -y_shift)
 
 shift_intercept <- -with(shift_results,
-                   y_shifts[which.min(abs(kick_EP - lineout_EP))])
+                         y_shifts[which.min(abs(kick_EP - lineout_EP))])
 
-# plot break-even shift at marker location
 delta_plot <- ggplot(shift_results_long,
                      aes(x = y_shift_plot, y = Expected_Points, color = Option)) +
   geom_line(linewidth = 1.2) +
@@ -172,5 +144,6 @@ delta_plot <- ggplot(shift_results_long,
     color = "Option"
   )
 
-ggsave("plots/delta_plot.png", delta_plot,
-       width = 10, height = 8, dpi = 300)
+ggsave("plots/delta_plot.png", delta_plot, width = 10, height = 8, dpi = 300)
+
+
