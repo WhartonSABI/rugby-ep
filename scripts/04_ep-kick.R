@@ -68,7 +68,7 @@ kick_data$upper <- pred$fit + 1.96 * pred$se.fit
 # Grid of x and y values
 grid <- expand.grid(
   x = seq(0, 70, length.out = 200),
-  y = seq(0, 70, length.out = 200)
+  y = seq(5, 70, length.out = 200)
 )
 
 # Compute angle and distance to posts (x=35, y=0)
@@ -109,7 +109,7 @@ kick_prob_plot
 
 # Cross section: straight in front of posts (x = 35), vary distance
 cross_section <- data.frame(
-  y = seq(1, 70, length.out = 200),
+  y = seq(5, 70, length.out = 200),
   x = 35
 ) %>%
   mutate(
