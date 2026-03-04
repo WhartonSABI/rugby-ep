@@ -68,7 +68,7 @@ kick_data$upper <- pred$fit + 1.96 * pred$se.fit
 # Grid of x and y values
 grid <- expand.grid(
   x = seq(0, 70, length.out = 200),
-  y = seq(5, 70, length.out = 200)
+  y = seq(5, 65, length.out = 200)
 )
 
 # Compute angle and distance to posts (x=35, y=0)
@@ -80,6 +80,9 @@ grid <- grid %>%
 
 # Predict probabilities
 grid$prob <- predict(model, newdata = grid, type = "response")
+
+# Turn into Expected Points
+grid$expected_points <- 3*grid$prob
 
 # Contour thresholds
 thresholds <- c(0.2, 0.4, 0.6, 0.8)
@@ -109,7 +112,7 @@ kick_prob_plot
 
 # Cross section: straight in front of posts (x = 35), vary distance
 cross_section <- data.frame(
-  y = seq(5, 70, length.out = 200),
+  y = seq(5, 65, length.out = 200),
   x = 35
 ) %>%
   mutate(
@@ -140,3 +143,5 @@ ggplot(cross_section, aes(x = y)) +
   ) +
   scale_y_continuous(limits = c(0, 1)) +
   theme_minimal()
+
+
