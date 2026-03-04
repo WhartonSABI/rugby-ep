@@ -54,7 +54,7 @@ max_lineout_ep <- max(grid$lineout_ep)
 y_shifts <- c(0, -5, -10, -15, -20, -25)
 
 # generate point-difference heatmaps for each shift
-for (shift in y_shifts) {
+lapply(y_shifts, function(shift) {
   grid_shifted <- grid %>%
     mutate(y_shifted = y + shift) %>%
     left_join(
@@ -66,18 +66,15 @@ for (shift in y_shifts) {
     mutate(
       lineout_ep_shifted = ifelse(is.na(lineout_ep_shifted),
                                   max_lineout_ep,
-                                  lineout_ep_shifted),
+                                  max_lineout_ep),
       point_diff = lineout_ep_shifted - kick_ep
     )
-
+  
   p <- ggplot(grid_shifted, aes(x = x, y = y, fill = point_diff)) +
     geom_raster(interpolate = TRUE) +
     scale_fill_gradient2(
-      low = "#E76F51",
-      mid = "white",
-      high = "#457B9D",
-      midpoint = 0,
-      name = "Lineout - Kick"
+      low = "#E76F51", mid = "white", high = "#457B9D",
+      midpoint = 0, name = "Lineout - Kick"
     ) +
     coord_fixed() +
     labs(
@@ -86,10 +83,10 @@ for (shift in y_shifts) {
       y = "Distance from goal line (m)"
     ) +
     theme_minimal(base_size = 14)
-
+  
   ggsave(paste0("plots/kick_vs_lineout_shift_", abs(shift), "m.png"),
-         p, width = 10, height = 8, dpi = 300)
-}
+         plot = p, width = 10, height = 8, dpi = 300)
+})
 
 ######################
 ### LINEOUT SHIFTS ###
