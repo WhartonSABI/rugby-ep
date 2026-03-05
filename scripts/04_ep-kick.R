@@ -199,9 +199,9 @@ ggsave("plots/cross_section_angle_plot.png", cross_section_angle_plot,
 ### Expected Points of a Miss ###
 #################################
 
-phase_data = read_csv("data/phase_2018-19.csv")
+phase_data_restarts = read_csv("data/phase_2018-19.csv")
 
-phase_data <- phase_data %>%
+phase_data_restarts <- phase_data_restarts %>%
   mutate(
     # extract signed points
     points = str_extract(Outcome, "[-+]?\\d+") %>% as.numeric(),
@@ -211,7 +211,7 @@ phase_data <- phase_data %>%
   )
 
 # Filtering out restarts with point changes (scores) and restarts if halfs
-phase_data_restarts <- phase_data %>%
+phase_data_restarts <- phase_data_restarts %>%
   group_by(Round, Home, Away) %>%
   filter(Phase == 1) %>%
   mutate(
