@@ -11,8 +11,8 @@ library(stringr)
 # install.packages("tidyverse")
 library(tidyverse)
 
-# set seed
-set.seed(11-19-2025)
+# set seed (date-style: 2025-11-19)
+set.seed(20251119)
 
 #######################
 ### PHASE DATA LOAD ###
