@@ -108,7 +108,7 @@ kick_prob_plot <- ggplot(grid, aes(x = x, y = y, fill = prob)) +
 
 kick_prob_plot
 
-ggsave("plots/kick_prob_plot.png", multi_ep_plot,
+ggsave("plots/kick_prob_plot.png", kick_prob_plot,
        width = 10, height = 8, dpi = 300)
 
 # Showing confidence interval
@@ -136,7 +136,7 @@ cross_section <- cross_section %>%
   )
 
 # Plot
-ggplot(cross_section, aes(x = y)) +
+cross_section_plot <- ggplot(cross_section, aes(x = y)) +
   geom_ribbon(aes(ymin = lower, ymax = upper), fill = "steelblue", alpha = 0.3) +
   geom_line(aes(y = prob), color = "steelblue", linewidth = 1) +
   labs(
@@ -146,5 +146,51 @@ ggplot(cross_section, aes(x = y)) +
   ) +
   scale_y_continuous(limits = c(0, 1)) +
   theme_minimal()
+
+ggsave("plots/cross_section_plot.png", cross_section_plot,
+       width = 10, height = 8, dpi = 300)
+
+# Cross section: fix y = 20, vary x from 0 to 70
+
+cross_section_angle <- data.frame(
+  x = seq(0, 70, length.out = 200),
+  y = 20
+) %>%
+  mutate(
+    angle = atan2(abs(x - 35), y) * (180 / pi),
+    Distance = sqrt((x - 35)^2 + y^2)
+  )
+
+# Predict with standard errors (on log-odds scale, then transform)
+pred_angle <- predict(model, newdata = cross_section_angle, type = "link", se.fit = TRUE)
+
+cross_section_angle <- cross_section_angle %>%
+  mutate(
+    fit_logit = pred_angle$fit,
+    se = pred_angle$se.fit,
+    prob = plogis(fit_logit),
+    lower = plogis(fit_logit - 1.96 * se),
+    upper = plogis(fit_logit + 1.96 * se)
+  )
+
+# Plot
+cross_section_angle_plot <- ggplot(cross_section_angle, aes(x = x)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "steelblue", alpha = 0.3) +
+  geom_line(aes(y = prob), color = "steelblue", linewidth = 1) +
+  geom_vline(xintercept = 35, linetype = "dashed", color = "gray50") +
+  annotate("text", x = 36, y = 0.1, label = "centre of posts", 
+           hjust = 0, color = "gray50", size = 3) +
+  labs(
+    title = "Kick Success Probability — Fixed Distance (y = 20m)",
+    x = "Distance from left touchline (m)",
+    y = "Probability of success"
+  ) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_minimal()
+
+cross_section_angle_plot
+
+ggsave("plots/cross_section_angle_plot.png", cross_section_angle_plot,
+       width = 10, height = 8, dpi = 300)
 
 
