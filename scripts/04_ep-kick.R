@@ -108,6 +108,9 @@ kick_prob_plot <- ggplot(grid, aes(x = x, y = y, fill = prob)) +
 
 kick_prob_plot
 
+ggsave("plots/kick_prob_plot.png", multi_ep_plot,
+       width = 10, height = 8, dpi = 300)
+
 # Showing confidence interval
 
 # Cross section: straight in front of posts (x = 35), vary distance
