@@ -239,33 +239,38 @@ sep_game_data_csv <- sep_game_data_csv %>%
     y = `y location`
   ) %>%
   mutate(
-    x = x - 35,
+    x = x,
     y = y
   )
 
-# rows with Card_Diff = 0 and WinPct_Diff = 0
-
-grid_scenario <- grid %>%
+data_with_ep <- sep_game_data_csv %>%
   mutate(
-    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0),
-    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = 0),
-    point_diff = lineout_ep_shifted - kick_ep
+    angle = atan2(abs(x - 35), y) * (180 / pi),
+    Distance = sqrt((x - 35)^2 + y^2),
+    kick_ep = 3 * predict(model, newdata = cur_data(), type = "response"),
+    lineout_ep = pmin(
+      lineout_ep_at_y(distance_from_try_after_shift, card_diff = 0, win_pct_diff = 0),
+      max_lineout_ep
+    ),
+    point_diff = lineout_ep - kick_ep
   )
 
-data_with_ep <- sep_game_data_csv %>%
-  # join lineout ep on shifted y
-  left_join(
-    grid_scenario %>% select(x, y, lineout_ep),
-    by = c("x" = "x", "distance_from_try_after_shift" = "y")
-  ) %>%
-  # join kick ep on original y
-  left_join(
-    grid_scenario %>% select(x, y, kick_ep),
-    by = c("x" = "x", "y" = "y")
-  ) %>%
+table_ep <- data_with_ep %>%
   mutate(
-    # lineout minus kick
-    point_diff = lineout_ep - kick_ep
+    optimal_decision = ifelse(point_diff > 0, "lineout", "kick"),
+    EP_optimal = ifelse(optimal_decision == "lineout", lineout_ep, kick_ep),
+    EP_actual  = ifelse(Decision == "lineout", lineout_ep, kick_ep),
+    ep_diff = abs(EP_optimal - EP_actual)
+  ) %>%
+  select(
+    Team,
+    lineout_ep,
+    kick_ep,
+    Decision,
+    optimal_decision,
+    EP_optimal,
+    EP_actual,
+    ep_diff
   )
 
 table_ep <- data_with_ep %>%
