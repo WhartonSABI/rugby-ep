@@ -68,7 +68,8 @@ ggsave("plots/baseline_with_marker.png", baseline_with_marker,
 
 # inspect ep values at marker point
 marker_values <- grid_scenario %>%
-  filter(x == marker_x, y == marker_y) %>%
+  mutate(dist = abs(x - marker_x) + abs(y - marker_y)) %>%
+  slice_min(dist, n = 1) %>%
   select(point_diff, kick_ep, lineout_ep_shifted)
 
 marker_values
