@@ -175,8 +175,11 @@ phase_data$meter_line <- lookup[phase_data$Location]
 sampled_phase_data <- phase_data %>%
   arrange(Round, Home, Away, ID) %>%
   group_by(Round, Home, Away, run_id) %>%
-  slice_sample(n = 1) %>% 
-  ungroup()
+  slice_sample(n = 1) %>%
+  ungroup() %>%
+  mutate(
+    meter_line_factor = factor(meter_line)
+  )
 
 #############
 ### PLOTS ###

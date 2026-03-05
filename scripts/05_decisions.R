@@ -12,8 +12,19 @@ plot_data <- plot_data %>%
   rename(lineout_ep = expected_points)
 
 # lineout ep lookup with clipping to observed meter range
+# smoother is built once per (card_diff, win_pct_diff) pair and cached to avoid
+# re-fitting inside mutate(), which caused a subscript-out-of-bounds error in
+# splinefun when called row-wise on a large grid
+lineout_ep_smoother_cache <- list()
+
 lineout_ep_at_y <- function(y_new, card_diff = 0, win_pct_diff = 0) {
-  smoother <- build_lineout_smoother(card_diff = card_diff, win_pct_diff = win_pct_diff)
+  cache_key <- paste(card_diff, win_pct_diff, sep = "_")
+  if (is.null(lineout_ep_smoother_cache[[cache_key]])) {
+    lineout_ep_smoother_cache[[cache_key]] <<- build_lineout_smoother(
+      card_diff = card_diff, win_pct_diff = win_pct_diff
+    )
+  }
+  smoother <- lineout_ep_smoother_cache[[cache_key]]
   y_clipped <- pmin(pmax(y_new, min(meter_lines)), max(meter_lines))
   as.numeric(smoother(y_clipped))
 }

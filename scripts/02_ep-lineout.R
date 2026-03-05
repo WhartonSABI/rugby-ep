@@ -8,8 +8,7 @@ source("scripts/01_data-prep.R")
 # format variables
 sampled_phase_data <- sampled_phase_data %>%
   mutate(
-    points_factor = factor(points),
-    meter_line_factor = factor(meter_line)
+    points_factor = factor(points)
   )
 
 # multinomial regression
@@ -104,7 +103,7 @@ build_lineout_smoother <- function(card_diff = 0, win_pct_diff = 0) {
 
   # non-increasing in meter line
   iso_fit <- isoreg(meter_lines, -ep_zone)
-  splinefun(iso_fit$x, -iso_fit$yf, method = "monoH.FC")
+  splinefun(iso_fit$x, -iso_fit$yf, method = "hyman")
 }
 
 # interpolated ep by meter line
