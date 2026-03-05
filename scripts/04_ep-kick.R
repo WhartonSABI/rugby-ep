@@ -1,4 +1,4 @@
-# run from project root; standalone (loads GAM from data/)
+# run from project root
 library(mgcv)
 library(tidyverse)
 library(tidyr)
@@ -192,5 +192,9 @@ cross_section_angle_plot
 
 ggsave("plots/cross_section_angle_plot.png", cross_section_angle_plot,
        width = 10, height = 8, dpi = 300)
+
+#################################
+### Expected Points of a Miss ###
+#################################
 
 
