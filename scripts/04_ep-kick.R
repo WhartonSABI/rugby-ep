@@ -84,7 +84,7 @@ grid <- grid %>%
 grid$prob <- predict(model, newdata = grid, type = "response")
 
 # Turn into Expected Points
-grid$expected_points <- 3*grid$prob
+grid$expected_points <- 3*grid$prob + 0.6*(1-grid$prob)
 
 # Contour thresholds
 thresholds <- c(0.2, 0.4, 0.6, 0.8)
@@ -277,3 +277,34 @@ ep_ci <- quantile(boot_ep, probs = c(0.025, 0.975))
 cat("Mean EP:", mean(boot_ep), "\n")
 cat("95% CI: [", ep_ci[1], ",", ep_ci[2], "]\n")
 
+boot_df <- data.frame(ep = boot_ep)
+
+# Missed Kick Bootstrap
+missed_bootstrap <- ggplot(boot_df, aes(x = ep)) +
+  geom_histogram(fill = "steelblue", color = "white", bins = 40) +
+  geom_vline(xintercept = mean(boot_ep), color = "steelblue", 
+             linewidth = 1, linetype = "dashed") +
+  geom_vline(xintercept = ep_ci[1], color = "red", 
+             linewidth = 1, linetype = "dashed") +
+  geom_vline(xintercept = ep_ci[2], color = "red", 
+             linewidth = 1, linetype = "dashed") +
+  annotate("text", x = mean(boot_ep), y = Inf, 
+           label = sprintf("Mean = %.2f", mean(boot_ep)),
+           hjust = -0.1, vjust = 2, color = "steelblue") +
+  annotate("text", x = ep_ci[1], y = Inf, 
+           label = sprintf("2.5%% = %.2f", ep_ci[1]),
+           hjust = 1.1, vjust = 2, color = "red") +
+  annotate("text", x = ep_ci[2], y = Inf, 
+           label = sprintf("97.5%% = %.2f", ep_ci[2]),
+           hjust = -0.1, vjust = 2, color = "red") +
+  labs(
+    title = "Bootstrap Distribution of Mean Expected Points",
+    x = "Mean Expected Points",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+missed_bootstrap
+
+ggsave("plots/missed_bootstrap.png", missed_bootstrap,
+       width = 10, height = 8, dpi = 300)

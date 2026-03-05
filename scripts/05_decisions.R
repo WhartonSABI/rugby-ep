@@ -58,7 +58,7 @@ for (shift in y_shifts) {
   grid_shifted <- grid %>%
     mutate(
       lineout_ep_shifted = lineout_ep_at_y(y + shift, card_diff = 0, win_pct_diff = 0),
-      kick_ep = 3*predict(model, newdata = grid, type = "response"),
+      kick_ep = 3*predict(model, newdata = grid, type = "response") + 0.6*(1-predict(model, newdata = grid, type = "response")),
       point_diff = lineout_ep_shifted - kick_ep
     )
   
