@@ -1,3 +1,5 @@
+source("scripts/01_data-prep.R")
+
 # run from project root
 library(mgcv)
 library(tidyverse)
@@ -197,4 +199,81 @@ ggsave("plots/cross_section_angle_plot.png", cross_section_angle_plot,
 ### Expected Points of a Miss ###
 #################################
 
+phase_data = read_csv("data/phase_2018-19.csv")
+
+phase_data <- phase_data %>%
+  mutate(
+    # extract signed points
+    points = str_extract(Outcome, "[-+]?\\d+") %>% as.numeric(),
+    
+    # replace missing points with 0
+    points = ifelse(is.na(points), 0, points)
+  )
+
+# Filtering out restarts with point changes (scores) and restarts if halfs
+phase_data_restarts <- phase_data %>%
+  group_by(Round, Home, Away) %>%
+  filter(Phase == 1) %>%
+  mutate(
+    Points_Diff_Change = abs(Points_Difference) - abs(lag(Points_Difference)),
+    is_first_row = row_number() == 1,
+    is_second_half_start = Seconds_Remaining < 2400 & lag(Seconds_Remaining) >= 2400
+  ) %>%
+  filter(
+    Play_Start == "Restart Kick",
+    is.na(Points_Diff_Change) | Points_Diff_Change == 0,
+    !is_first_row,
+    !is.na(is_second_half_start) & !is_second_half_start
+  ) %>%
+  ungroup()
+
+unique(phase_data_restarts$Location)
+
+ep_by_zone <- phase_data_restarts %>%
+  group_by(Location) %>%
+  summarise(
+    n = n(),
+    avg_ep = round(mean(points), 2)
+  ) %>%
+  ungroup()
+
+# add overall average row
+overall <- phase_data_restarts %>%
+  summarise(
+    Location = "Overall Average",
+    n = n(),
+    avg_ep = round(mean(points), 2)
+  )
+
+ep_table <- bind_rows(ep_by_zone, overall)
+
+print(ep_table)
+
+# Data set to bootstrap
+
+kick_miss_ep <- phase_data_restarts %>%
+  select(points, ID)
+
+# number of bootstrap replicates
+B <- 2000
+
+# one bootstrap replicate
+one_boot_ep <- function(b) {
+  kick_miss_ep %>%
+    slice_sample(n = nrow(kick_miss_ep), replace = TRUE) %>%
+    group_by(ID) %>%
+    slice_sample(n = 1) %>%
+    ungroup() %>%
+    summarise(mean_ep = mean(points)) %>%
+    pull(mean_ep)
+}
+
+# run bootstrap
+boot_ep <- sapply(seq_len(B), one_boot_ep)
+
+# 95% percentile CI
+ep_ci <- quantile(boot_ep, probs = c(0.025, 0.975))
+
+cat("Mean EP:", mean(boot_ep), "\n")
+cat("95% CI: [", ep_ci[1], ",", ep_ci[2], "]\n")
 
