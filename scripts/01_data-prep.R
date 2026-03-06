@@ -229,7 +229,7 @@ ggsave("plots/win_per_marginal.png", win_per_marginal,
 
 # card differential
 card_dif_marginal <- ggplot(sampled_phase_data, aes(x = factor(Card_Diff), y = points)) +
-  geom_boxplot(fill = "lightblue") +
+  geom_boxplot(fill = "steelblue") +
   labs(
     title = "Points by Card Differential",
     x = "Card Differential (Opponent - Own)",

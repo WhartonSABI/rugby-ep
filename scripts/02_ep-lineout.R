@@ -111,8 +111,8 @@ ep_by_meter_line_data <- plot_data %>%
   mutate(expected_points = build_lineout_smoother()(meter_line))
 
 ep_by_meter_line <- ggplot(ep_by_meter_line_data, aes(x = meter_line, y = expected_points)) +
-  geom_line(linewidth = 1, color = "blue") +
-  geom_point(size = 3, color = "blue") +
+  geom_line(linewidth = 1, color = "steelblue") +
+  geom_point(size = 3, color = "steelblue") +
   labs(
     title = "Expected Points by Field Zone",
     subtitle = "Interpolated lineout EP. Card_Diff = 0, WinPct_Diff = 0",
