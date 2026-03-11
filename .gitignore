@@ -5,14 +5,18 @@
 # old work
 archived
 
+# finder tracker
+.DS_Store
+
 # for literature
 literature/
 
 # jp's sandbox
 jp/
 
-# finder tracker
-.DS_Store
+# tex source files
+*.tex
+*.bib
 
 #########
 ### R ###
