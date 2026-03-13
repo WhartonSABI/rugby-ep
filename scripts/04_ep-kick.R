@@ -7,6 +7,110 @@ library(tidyr)
 library(dplyr)
 library(ggplot2)
 
+add_kick_features <- function(df) {
+  df %>%
+    mutate(
+      angle = atan2(abs(x - 35), y) * (180 / pi),
+      Distance = sqrt((x - 35)^2 + y^2)
+    )
+}
+
+location_center_lookup <- c(
+  "5m-Goal (opp)" = 2.5,
+  "22m-5m (opp)" = 13.5,
+  "10m-22m (opp)" = 31.0,
+  "Half-10m (opp)" = 45.0,
+  "10m-Half (own)" = 55.0,
+  "22m-10m (own)" = 69.0,
+  "5m-22m (own)" = 86.5,
+  "Goal-5m (own)" = 97.5
+)
+
+# Map y (meters from opposition try line) to phase-data location zones.
+zone_from_y <- function(y) {
+  zone_levels <- c(
+    "5m-Goal (opp)",
+    "22m-5m (opp)",
+    "10m-22m (opp)",
+    "Half-10m (opp)",
+    "10m-Half (own)",
+    "22m-10m (own)",
+    "5m-22m (own)",
+    "Goal-5m (own)"
+  )
+  as.character(cut(
+    y,
+    breaks = c(0, 5, 22, 40, 50, 60, 78, 95, Inf),
+    labels = zone_levels,
+    include.lowest = TRUE,
+    right = TRUE
+  ))
+}
+
+build_miss_lookup <- function(restart_df) {
+  by_zone <- restart_df %>%
+    group_by(Location) %>%
+    summarise(
+      n = n(),
+      avg_ep = mean(points),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      center_y = unname(location_center_lookup[Location])
+    ) %>%
+    arrange(center_y)
+
+  miss_spline <- NULL
+  if (nrow(by_zone) >= 4 && all(!is.na(by_zone$center_y))) {
+    miss_spline <- try(
+      stats::smooth.spline(
+        x = by_zone$center_y,
+        y = by_zone$avg_ep,
+        w = pmax(by_zone$n, 1),
+        spar = 0.6
+      ),
+      silent = TRUE
+    )
+    if (inherits(miss_spline, "try-error")) {
+      miss_spline <- NULL
+    }
+  }
+
+  list(
+    by_zone = by_zone,
+    lookup = setNames(by_zone$avg_ep, by_zone$Location),
+    overall = mean(restart_df$points),
+    spline = miss_spline,
+    y_min = min(by_zone$center_y, na.rm = TRUE),
+    y_max = max(by_zone$center_y, na.rm = TRUE)
+  )
+}
+
+miss_ep_from_y <- function(y, miss_lookup, method = c("smooth", "step")) {
+  method <- match.arg(method)
+
+  if (method == "smooth" && !is.null(miss_lookup$spline)) {
+    y_clip <- pmin(pmax(y, miss_lookup$y_min), miss_lookup$y_max)
+    return(as.numeric(predict(miss_lookup$spline, x = y_clip)$y))
+  }
+
+  zones <- zone_from_y(y)
+  zone_vals <- unname(miss_lookup$lookup[zones])
+  zone_vals[is.na(zone_vals)] <- miss_lookup$overall
+  as.numeric(zone_vals)
+}
+
+predict_kick_ep <- function(kick_model, newdata, miss_lookup, miss_method = "smooth") {
+  nd <- newdata
+  if (!("angle" %in% names(nd)) || !("Distance" %in% names(nd))) {
+    nd <- add_kick_features(nd)
+  }
+
+  p_make <- as.numeric(predict(kick_model, newdata = nd, type = "response"))
+  ep_miss <- miss_ep_from_y(nd$y, miss_lookup, method = miss_method)
+  3 * p_make + (1 - p_make) * ep_miss
+}
+
 ###############################
 ### KICKING EXPECTED POINTS ###
 ###############################
@@ -44,10 +148,43 @@ kick_data_small <- kick_data %>%
 
 # Computing angle of each kick
 
-kick_data_small <- kick_data_small %>%
+kick_data_small <- add_kick_features(kick_data_small)
+
+# Empirical 5m x 5m make-rate surface
+kick_empirical <- kick_data_small %>%
   mutate(
-    angle = atan2(abs(x - 35), y) * (180 / pi)
+    x_bin = pmin(67.5, floor(x / 5) * 5 + 2.5),
+    y_bin = pmin(97.5, floor(y / 5) * 5 + 2.5)
+  ) %>%
+  group_by(x_bin, y_bin) %>%
+  summarise(
+    n = n(),
+    make_rate = mean(make),
+    .groups = "drop"
   )
+
+kick_empirical_heatmap <- ggplot(kick_empirical, aes(x = x_bin, y = y_bin, fill = make_rate)) +
+  geom_tile(color = "white", linewidth = 0.15) +
+  scale_fill_viridis_c(
+    option = "magma",
+    limits = c(0, 1),
+    name = "Empirical\nmake rate"
+  ) +
+  coord_fixed() +
+  labs(
+    title = "Empirical penalty make rate (5m x 5m grid)",
+    x = "Lateral position (m)",
+    y = "Distance from opposition try line (m)"
+  ) +
+  theme_minimal(base_size = 12)
+
+ggsave(
+  "plots/kick_empirical_heatmap.png",
+  kick_empirical_heatmap,
+  width = 10,
+  height = 8,
+  dpi = 300
+)
 
 # Simple Model
 
@@ -74,17 +211,10 @@ grid <- expand.grid(
 )
 
 # Compute angle and distance to posts (x=35, y=0)
-grid <- grid %>%
-  mutate(
-    angle = atan2(abs(x - 35), y) * (180 / pi),
-    Distance = sqrt((x - 35)^2 + y^2)
-  )
+grid <- add_kick_features(grid)
 
 # Predict probabilities
 grid$prob <- predict(model, newdata = grid, type = "response")
-
-# Turn into Expected Points
-grid$expected_points <- 3*grid$prob + 0.6*(1-grid$prob)
 
 # Contour thresholds
 thresholds <- c(0.2, 0.4, 0.6, 0.8)
@@ -120,10 +250,7 @@ cross_section <- data.frame(
   y = seq(5, 65, length.out = 200),
   x = 35
 ) %>%
-  mutate(
-    angle = atan2(abs(x - 35), y) * (180 / pi),
-    Distance = sqrt((x - 35)^2 + y^2)
-  )
+  add_kick_features()
 
 # Predict with standard errors (on log-odds scale, then transform)
 pred <- predict(model, newdata = cross_section, type = "link", se.fit = TRUE)
@@ -142,7 +269,7 @@ cross_section_plot <- ggplot(cross_section, aes(x = y)) +
   geom_ribbon(aes(ymin = lower, ymax = upper), fill = "steelblue", alpha = 0.3) +
   geom_line(aes(y = prob), color = "steelblue", linewidth = 1) +
   labs(
-    title = "Kick Success Probability — Straight in Front (x = 35)",
+    title = "Kick Success Probability - Straight in Front (x = 35)",
     x = "Distance from goal line (m)",
     y = "Probability of success"
   ) +
@@ -158,10 +285,7 @@ cross_section_angle <- data.frame(
   x = seq(0, 70, length.out = 200),
   y = 20
 ) %>%
-  mutate(
-    angle = atan2(abs(x - 35), y) * (180 / pi),
-    Distance = sqrt((x - 35)^2 + y^2)
-  )
+  add_kick_features()
 
 # Predict with standard errors (on log-odds scale, then transform)
 pred_angle <- predict(model, newdata = cross_section_angle, type = "link", se.fit = TRUE)
@@ -183,7 +307,7 @@ cross_section_angle_plot <- ggplot(cross_section_angle, aes(x = x)) +
   annotate("text", x = 36, y = 0.1, label = "centre of posts", 
            hjust = 0, color = "gray50", size = 3) +
   labs(
-    title = "Kick Success Probability — Fixed Distance (y = 20m)",
+    title = "Kick Success Probability - Fixed Distance (y = 20m)",
     x = "Distance from left touchline (m)",
     y = "Probability of success"
   ) +
@@ -229,25 +353,28 @@ phase_data_restarts <- phase_data_restarts %>%
 
 unique(phase_data_restarts$Location)
 
-ep_by_zone <- phase_data_restarts %>%
-  group_by(Location) %>%
-  summarise(
-    n = n(),
-    avg_ep = round(mean(points), 2)
-  ) %>%
-  ungroup()
+miss_lookup <- build_miss_lookup(phase_data_restarts)
+
+ep_by_zone <- miss_lookup$by_zone %>%
+  transmute(
+    Location,
+    n,
+    avg_ep = round(avg_ep, 2)
+  )
 
 # add overall average row
-overall <- phase_data_restarts %>%
-  summarise(
-    Location = "Overall Average",
-    n = n(),
-    avg_ep = round(mean(points), 2)
-  )
+overall <- tibble(
+  Location = "Overall Average",
+  n = nrow(phase_data_restarts),
+  avg_ep = round(miss_lookup$overall, 2)
+)
 
 ep_table <- bind_rows(ep_by_zone, overall)
 
 print(ep_table)
+
+# Continuation-aware EP surface for kicks.
+grid$expected_points <- predict_kick_ep(model, grid, miss_lookup)
 
 # Data set to bootstrap
 
@@ -259,13 +386,8 @@ B <- 2000
 
 # one bootstrap replicate
 one_boot_ep <- function(b) {
-  kick_miss_ep %>%
-    slice_sample(n = nrow(kick_miss_ep), replace = TRUE) %>%
-    group_by(ID) %>%
-    slice_sample(n = 1) %>%
-    ungroup() %>%
-    summarise(mean_ep = mean(points)) %>%
-    pull(mean_ep)
+  idx <- sample.int(nrow(kick_miss_ep), size = nrow(kick_miss_ep), replace = TRUE)
+  mean(kick_miss_ep$points[idx])
 }
 
 # run bootstrap

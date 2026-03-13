@@ -99,7 +99,8 @@ opponent_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
     x = "Lateral position (m)",
     y = "Distance from goal line (m)"
   ) +
-  theme_minimal(base_size = 14)
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
 
 ggsave("plots/opponent_yellow.png", opponent_yellow,
        width = 10, height = 8, dpi = 300)
@@ -160,7 +161,8 @@ own_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
     x = "Lateral position (m)",
     y = "Distance from goal line (m)"
   ) +
-  theme_minimal(base_size = 14)
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
 
 ggsave("plots/own_yellow.png", own_yellow,
        width = 10, height = 8, dpi = 300)
@@ -191,7 +193,8 @@ bad_team <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
     x = "Lateral position (m)",
     y = "Distance from goal line (m)"
   ) +
-  theme_minimal(base_size = 14)
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
 
 ggsave("plots/bad_team.png", bad_team,
        width = 10, height = 8, dpi = 300)
@@ -222,7 +225,8 @@ good_team <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
     x = "Lateral position (m)",
     y = "Distance from goal line (m)"
   ) +
-  theme_minimal(base_size = 14)
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
 
 ggsave("plots/good_team.png", good_team,
        width = 10, height = 8, dpi = 300)
@@ -248,7 +252,7 @@ data_with_ep <- sep_game_data_csv %>%
   mutate(
     angle = atan2(abs(x - 35), y) * (180 / pi),
     Distance = sqrt((x - 35)^2 + y^2),
-    kick_ep = 3 * predict(model, newdata = cur_data(), type = "response"),
+    kick_ep = predict_kick_ep(model, pick(everything()), miss_lookup),
     lineout_ep = pmin(
       lineout_ep_at_y(distance_from_try_after_shift, card_diff = 0, win_pct_diff = 0),
       max_lineout_ep

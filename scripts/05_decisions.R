@@ -69,7 +69,7 @@ for (shift in y_shifts) {
   grid_shifted <- grid %>%
     mutate(
       lineout_ep_shifted = lineout_ep_at_y(y + shift, card_diff = 0, win_pct_diff = 0),
-      kick_ep = 3*predict(model, newdata = grid, type = "response") + 0.6*(1-predict(model, newdata = grid, type = "response")),
+      kick_ep = predict_kick_ep(model, pick(everything()), miss_lookup),
       point_diff = lineout_ep_shifted - kick_ep
     )
   
@@ -86,6 +86,10 @@ for (shift in y_shifts) {
       y = "Distance from goal line (m)"
     ) +
     theme_minimal(base_size = 14)
+
+  if (shift != 0) {
+    p <- p + theme(legend.position = "none")
+  }
   
   ggsave(paste0("plots/kick_vs_lineout_shift_", abs(shift), "m.png"),
          plot = p, width = 10, height = 8, dpi = 300)
@@ -101,14 +105,11 @@ marker_y <- 30
 y_shifts <- seq(0, -30, by = -1)
 
 # get kick_ep at marker location
-marker_kick_ep <- 3 * predict(model, 
-                              newdata = data.frame(
-                                x = marker_x, 
-                                y = marker_y,
-                                angle = atan2(abs(marker_x - 35), marker_y) * (180 / pi),
-                                Distance = sqrt((marker_x - 35)^2 + marker_y^2)
-                              ), 
-                              type = "response")
+marker_kick_ep <- predict_kick_ep(
+  model,
+  data.frame(x = marker_x, y = marker_y),
+  miss_lookup
+)
 
 shift_results <- lapply(y_shifts, function(shift) {
   tibble(
@@ -156,5 +157,3 @@ delta_plot <- ggplot(shift_results_long,
   )
 
 ggsave("plots/delta_plot.png", delta_plot, width = 10, height = 8, dpi = 300)
-
-
