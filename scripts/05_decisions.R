@@ -17,11 +17,13 @@ plot_data <- plot_data %>%
 # splinefun when called row-wise on a large grid
 lineout_ep_smoother_cache <- list()
 
-lineout_ep_at_y <- function(y_new, card_diff = 0, win_pct_diff = 0) {
-  cache_key <- paste(card_diff, win_pct_diff, sep = "_")
+lineout_ep_at_y <- function(y_new, card_diff = 0, win_pct_diff = 0, less_than_2_min = 0) {
+  cache_key <- paste(card_diff, win_pct_diff, less_than_2_min, sep = "_")
   if (is.null(lineout_ep_smoother_cache[[cache_key]])) {
     lineout_ep_smoother_cache[[cache_key]] <<- build_lineout_smoother(
-      card_diff = card_diff, win_pct_diff = win_pct_diff
+      card_diff = card_diff,
+      win_pct_diff = win_pct_diff,
+      less_than_2_min = less_than_2_min
     )
   }
   smoother <- lineout_ep_smoother_cache[[cache_key]]
@@ -32,7 +34,7 @@ lineout_ep_at_y <- function(y_new, card_diff = 0, win_pct_diff = 0) {
 grid <- grid %>%
   rename(kick_ep = expected_points) %>%
   mutate(
-    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0),
+    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0, less_than_2_min = 0),
     point_diff = lineout_ep - kick_ep
   )
 
@@ -68,7 +70,7 @@ y_shifts <- c(0, -5, -10, -15, -20, -25)
 for (shift in y_shifts) {
   grid_shifted <- grid %>%
     mutate(
-      lineout_ep_shifted = lineout_ep_at_y(y + shift, card_diff = 0, win_pct_diff = 0),
+      lineout_ep_shifted = lineout_ep_at_y(y + shift, card_diff = 0, win_pct_diff = 0, less_than_2_min = 0),
       kick_ep = predict_kick_ep(model, pick(everything()), miss_lookup),
       point_diff = lineout_ep_shifted - kick_ep
     )
@@ -115,7 +117,10 @@ shift_results <- lapply(y_shifts, function(shift) {
   tibble(
     y_shift = shift,
     kick_EP = marker_kick_ep,  # fixed — kick is always from marker location
-    lineout_EP = pmin(lineout_ep_at_y(marker_y + shift, card_diff = 0, win_pct_diff = 0), max_lineout_ep)
+    lineout_EP = pmin(
+      lineout_ep_at_y(marker_y + shift, card_diff = 0, win_pct_diff = 0, less_than_2_min = 0),
+      max_lineout_ep
+    )
   )
 }) %>%
   bind_rows()

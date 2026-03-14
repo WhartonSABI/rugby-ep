@@ -135,7 +135,8 @@ lineout_full <- phase_points %>%
       Seconds_Remaining > 2400,
       Seconds_Remaining - 2400,
       Seconds_Remaining
-    )
+    ),
+    Less_Than_2_Min = if_else(Seconds_Remaining_Half < 120, 1, 0)
   ) %>%
   arrange(Round, Home, Away, ID) %>%
   group_by(Round, Home, Away) %>%
@@ -164,23 +165,23 @@ meter_levels <- sort(unique(lineout_full$meter_line))
 lineout_models <- list(
   list(
     key = "lineout_baseline",
-    label = "Baseline: meter + Card + WinPct",
-    formula = points_factor ~ meter_line_factor + Card_Diff + WinPct_Diff
+    label = "Baseline: meter + Card + WinPct + <2min",
+    formula = points_factor ~ meter_line_factor + Card_Diff + WinPct_Diff + Less_Than_2_Min
   ),
   list(
     key = "lineout_plus_interaction",
     label = "Baseline + Card x WinPct",
-    formula = points_factor ~ meter_line_factor + Card_Diff * WinPct_Diff
+    formula = points_factor ~ meter_line_factor + Card_Diff * WinPct_Diff + Less_Than_2_Min
   ),
   list(
     key = "lineout_separate_strengths",
     label = "Baseline with separate team strengths",
-    formula = points_factor ~ meter_line_factor + Card_Diff + WinPct_Before + Opponent_WinPct
+    formula = points_factor ~ meter_line_factor + Card_Diff + WinPct_Before + Opponent_WinPct + Less_Than_2_Min
   ),
   list(
     key = "lineout_plus_time",
-    label = "Baseline + time remaining",
-    formula = points_factor ~ meter_line_factor + Card_Diff + WinPct_Diff + Seconds_Remaining_Half
+    label = "Baseline + continuous time",
+    formula = points_factor ~ meter_line_factor + Card_Diff + WinPct_Diff + Less_Than_2_Min + Seconds_Remaining_Half
   )
 )
 
@@ -303,6 +304,7 @@ ep_eval_grid <- tidyr::expand_grid(
     meter_line_factor = factor(meter_line, levels = meter_levels),
     WinPct_Before = 0.5 + WinPct_Diff / 2,
     Opponent_WinPct = 0.5 - WinPct_Diff / 2,
+    Less_Than_2_Min = 0,
     Seconds_Remaining_Half = 1200
   )
 
@@ -462,7 +464,7 @@ table_lines <- c(
   "}",
   "\\vspace{0.4em}",
   "\\begin{minipage}{0.95\\linewidth}",
-  "\\footnotesize Baselines are: lineout multinomial with meter-line factor + card differential + win-percentage differential, and kick logistic regression with angle + distance.",
+  "\\footnotesize Baselines are: lineout multinomial with meter-line factor + card differential + win-percentage differential + under-2-minute indicator, and kick logistic regression with angle + distance.",
   "\\end{minipage}",
   "\\end{table}"
 )

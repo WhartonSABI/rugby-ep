@@ -8,9 +8,17 @@ source("scripts/02_ep-lineout.R")
 # clustered bootstrap
 # 1) resample matches with replacement
 # 2) sample one row per run_id within each match
-boot_B <- as.integer(Sys.getenv("EP_BOOT_B", unset = "2000"))
+boot_B <- as.integer(Sys.getenv("EP_BOOT_B", unset = "1000"))
 n_cores <- as.integer(Sys.getenv("EP_BOOT_CORES", unset = NA_character_))
-if (is.na(n_cores)) n_cores <- min(12, max(1L, parallel::detectCores() - 1L))
+if (is.na(n_cores)) {
+  detected_cores <- suppressWarnings(parallel::detectCores())
+  if (is.na(detected_cores)) {
+    n_cores <- 1L
+  } else {
+    n_cores <- min(12L, max(1L, detected_cores - 1L))
+  }
+}
+n_cores <- max(1L, as.integer(n_cores))
 message("Bootstrap: B = ", boot_B, ", cores = ", n_cores)
 
 # unique match ids for clustered resampling
@@ -38,7 +46,7 @@ one_boot <- function(b) {
 
   boot_fit <- try(
     nnet::multinom(
-      points_factor ~ meter_line_factor + Card_Diff + WinPct_Diff,
+      points_factor ~ meter_line_factor + Card_Diff + WinPct_Diff + Less_Than_2_Min,
       data = boot_sample,
       trace = FALSE
     ),

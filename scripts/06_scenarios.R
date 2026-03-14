@@ -12,8 +12,8 @@ y_shift <- -20
 # build baseline shifted lineout minus kick surface
 grid_scenario <- grid %>%
   mutate(
-    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0),
-    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = 0),
+    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0, less_than_2_min = 0),
+    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = 0, less_than_2_min = 0),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
@@ -30,7 +30,7 @@ baseline_points_diff <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_dif
   coord_fixed() +
   labs(
     title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
-    subtitle = "Baseline: Card_Diff = 0, WinPct_Diff = 0",
+    subtitle = "Baseline: Card_Diff = 0, WinPct_Diff = 0, Less_Than_2_Min = 0",
     x = "Lateral position (m)",
     y = "Distance from goal line (m)"
   ) +
@@ -57,7 +57,7 @@ baseline_with_marker <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_dif
   coord_fixed() +
   labs(
     title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
-    subtitle = "Baseline: Card_Diff = 0, WinPct_Diff = 0",
+    subtitle = "Baseline: Card_Diff = 0, WinPct_Diff = 0, Less_Than_2_Min = 0",
     x = "Lateral position (m)",
     y = "Distance from goal line (m)"
   ) +
@@ -78,8 +78,8 @@ marker_values
 
 grid_scenario <- grid %>%
   mutate(
-    lineout_ep = lineout_ep_at_y(y, card_diff = 1, win_pct_diff = 0),
-    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 1, win_pct_diff = 0),
+    lineout_ep = lineout_ep_at_y(y, card_diff = 1, win_pct_diff = 0, less_than_2_min = 0),
+    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 1, win_pct_diff = 0, less_than_2_min = 0),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
@@ -109,8 +109,8 @@ ggsave("plots/opponent_yellow.png", opponent_yellow,
 # reset to neutral card state
 grid_scenario <- grid %>%
   mutate(
-    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0),
-    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = 0),
+    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0, less_than_2_min = 0),
+    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = 0, less_than_2_min = 0),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
@@ -140,8 +140,8 @@ ggsave("plots/no_yellow.png", no_yellow,
 
 grid_scenario <- grid %>%
   mutate(
-    lineout_ep = lineout_ep_at_y(y, card_diff = -1, win_pct_diff = 0),
-    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = -1, win_pct_diff = 0),
+    lineout_ep = lineout_ep_at_y(y, card_diff = -1, win_pct_diff = 0, less_than_2_min = 0),
+    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = -1, win_pct_diff = 0, less_than_2_min = 0),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
@@ -172,8 +172,8 @@ ggsave("plots/own_yellow.png", own_yellow,
 
 grid_scenario <- grid %>%
   mutate(
-    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = -0.25),
-    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = -0.25),
+    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = -0.25, less_than_2_min = 0),
+    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = -0.25, less_than_2_min = 0),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
@@ -204,8 +204,8 @@ ggsave("plots/bad_team.png", bad_team,
 
 grid_scenario <- grid %>%
   mutate(
-    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0.25),
-    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = 0.25),
+    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0.25, less_than_2_min = 0),
+    lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = 0.25, less_than_2_min = 0),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
@@ -254,7 +254,18 @@ data_with_ep <- sep_game_data_csv %>%
     Distance = sqrt((x - 35)^2 + y^2),
     kick_ep = predict_kick_ep(model, pick(everything()), miss_lookup),
     lineout_ep = pmin(
-      lineout_ep_at_y(distance_from_try_after_shift, card_diff = 0, win_pct_diff = 0),
+      mapply(
+        function(y_after_shift, l2m) {
+          lineout_ep_at_y(
+            y_after_shift,
+            card_diff = 0,
+            win_pct_diff = 0,
+            less_than_2_min = l2m
+          )
+        },
+        distance_from_try_after_shift,
+        Less_Than_2_Min_val
+      ),
       max_lineout_ep
     ),
     point_diff = lineout_ep - kick_ep

@@ -1,7 +1,7 @@
 "component","model_key","model_label","cv_log_loss","cv_brier","delta_log_loss_vs_baseline","folds_used"
 "Kick success","kick_logit","Logistic: angle + distance",0.5183,0.1753,0,5
 "Kick success","kick_gam","GAM: s(angle) + s(distance)",0.5165,0.1748,-0.0018,5
-"Lineout multinomial","lineout_baseline","Baseline: meter + Card + WinPct",1.8059,0.8103,0,5
-"Lineout multinomial","lineout_plus_interaction","Baseline + Card x WinPct",1.8177,0.8111,0.0117,5
-"Lineout multinomial","lineout_separate_strengths","Baseline with separate team strengths",1.796,0.8076,-0.0099,5
-"Lineout multinomial","lineout_plus_time","Baseline + time remaining",1.7145,0.7752,-0.0915,5
+"Lineout multinomial","lineout_baseline","Baseline: meter + Card + WinPct + <2min",1.7567,0.7856,0,5
+"Lineout multinomial","lineout_plus_interaction","Baseline + Card x WinPct",1.7665,0.7862,0.0098,5
+"Lineout multinomial","lineout_separate_strengths","Baseline with separate team strengths",1.7414,0.7825,-0.0152,5
+"Lineout multinomial","lineout_plus_time","Baseline + continuous time",1.7117,0.7718,-0.045,5

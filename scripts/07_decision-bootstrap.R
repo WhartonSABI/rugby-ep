@@ -13,7 +13,15 @@ library(ggplot2)
 
 boot_B <- as.integer(Sys.getenv("EP_DECISION_BOOT_B", unset = "1000"))
 n_cores <- as.integer(Sys.getenv("EP_DECISION_BOOT_CORES", unset = NA_character_))
-if (is.na(n_cores)) n_cores <- min(12, max(1L, parallel::detectCores() - 1L))
+if (is.na(n_cores)) {
+  detected_cores <- suppressWarnings(parallel::detectCores())
+  if (is.na(detected_cores)) {
+    n_cores <- 1L
+  } else {
+    n_cores <- min(12L, max(1L, detected_cores - 1L))
+  }
+}
+n_cores <- max(1L, as.integer(n_cores))
 message("Decision bootstrap: B = ", boot_B, ", cores = ", n_cores)
 
 set.seed(20260313)
@@ -30,12 +38,19 @@ match_keys <- phase_data %>%
 n_matches <- nrow(match_keys)
 meter_line_levels <- levels(sampled_phase_data$meter_line_factor)
 
-predict_lineout_ep_boot <- function(meter_line, boot_model, card_diff = 0, win_pct_diff = 0) {
+predict_lineout_ep_boot <- function(
+    meter_line,
+    boot_model,
+    card_diff = 0,
+    win_pct_diff = 0,
+    less_than_2_min = 0
+) {
   new_data <- tibble(
     meter_line = meter_line,
     meter_line_factor = factor(meter_line, levels = meter_line_levels),
     Card_Diff = card_diff,
-    WinPct_Diff = win_pct_diff
+    WinPct_Diff = win_pct_diff,
+    Less_Than_2_Min = less_than_2_min
   )
 
   probs <- predict(boot_model, newdata = new_data, type = "probs")
@@ -43,12 +58,13 @@ predict_lineout_ep_boot <- function(meter_line, boot_model, card_diff = 0, win_p
   as.vector(probs %*% point_values)
 }
 
-build_lineout_smoother_boot <- function(boot_model, card_diff = 0, win_pct_diff = 0) {
+build_lineout_smoother_boot <- function(boot_model, card_diff = 0, win_pct_diff = 0, less_than_2_min = 0) {
   ep_zone <- predict_lineout_ep_boot(
     meter_lines,
     boot_model,
     card_diff = card_diff,
-    win_pct_diff = win_pct_diff
+    win_pct_diff = win_pct_diff,
+    less_than_2_min = less_than_2_min
   )
   iso_fit <- isoreg(meter_lines, -ep_zone)
   splinefun(iso_fit$x, -iso_fit$yf, method = "hyman")
@@ -72,7 +88,7 @@ one_joint_boot <- function(b) {
 
   boot_lineout_model <- try(
     nnet::multinom(
-      points_factor ~ meter_line_factor + Card_Diff + WinPct_Diff,
+      points_factor ~ meter_line_factor + Card_Diff + WinPct_Diff + Less_Than_2_Min,
       data = boot_phase,
       trace = FALSE
     ),
@@ -104,7 +120,12 @@ one_joint_boot <- function(b) {
     ))
   }
 
-  lineout_smoother <- build_lineout_smoother_boot(boot_lineout_model, card_diff = 0, win_pct_diff = 0)
+  lineout_smoother <- build_lineout_smoother_boot(
+    boot_lineout_model,
+    card_diff = 0,
+    win_pct_diff = 0,
+    less_than_2_min = 0
+  )
   lineout_y <- pmin(pmax(marker_y + y_shifts, min(meter_lines)), max(meter_lines))
   lineout_ep <- as.numeric(lineout_smoother(lineout_y))
 
@@ -249,4 +270,3 @@ delta_shift_plot <- shift_summary %>%
   theme_minimal(base_size = 13)
 
 ggsave("plots/delta_plot_bootstrap.png", delta_shift_plot, width = 10, height = 7, dpi = 300)
-

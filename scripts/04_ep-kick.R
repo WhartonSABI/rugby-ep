@@ -382,7 +382,7 @@ kick_miss_ep <- phase_data_restarts %>%
   select(points, ID)
 
 # number of bootstrap replicates
-B <- 2000
+B <- as.integer(Sys.getenv("EP_MISS_BOOT_B", unset = "1000"))
 
 # one bootstrap replicate
 one_boot_ep <- function(b) {

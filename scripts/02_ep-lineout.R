@@ -13,7 +13,7 @@ sampled_phase_data <- sampled_phase_data %>%
 
 # multinomial regression
 multinomial_model <- nnet::multinom(
-  points_factor ~ meter_line_factor + Card_Diff + WinPct_Diff,
+  points_factor ~ meter_line_factor + Card_Diff + WinPct_Diff + Less_Than_2_Min,
   data = sampled_phase_data,
   trace = FALSE
 )
@@ -29,19 +29,21 @@ pred_data <- tibble(
   meter_line = meter_lines,
   meter_line_factor = factor(meter_line, levels = levels(sampled_phase_data$meter_line_factor)),
   Card_Diff = mean(sampled_phase_data$Card_Diff, na.rm = TRUE),
-  WinPct_Diff = mean(sampled_phase_data$WinPct_Diff, na.rm = TRUE)
+  WinPct_Diff = mean(sampled_phase_data$WinPct_Diff, na.rm = TRUE),
+  Less_Than_2_Min = 0
 )
 
 point_levels <- levels(sampled_phase_data$points_factor)
 point_values <- as.numeric(as.character(point_levels))
 
 # helper: return class probabilities across meter lines
-get_probs_by_meter <- function(card_diff = 0, win_pct_diff = 0) {
+get_probs_by_meter <- function(card_diff = 0, win_pct_diff = 0, less_than_2_min = 0) {
   pred <- tibble(
     meter_line = meter_lines,
     meter_line_factor = factor(meter_line, levels = levels(sampled_phase_data$meter_line_factor)),
     Card_Diff = card_diff,
-    WinPct_Diff = win_pct_diff
+    WinPct_Diff = win_pct_diff,
+    Less_Than_2_Min = less_than_2_min
   )
   pr <- predict(multinomial_model, newdata = pred, type = "probs")
   if (is.vector(pr)) pr <- matrix(pr, nrow = 1)
@@ -49,12 +51,19 @@ get_probs_by_meter <- function(card_diff = 0, win_pct_diff = 0) {
 }
 
 # helper: return expected points from predicted probabilities
-predict_lineout_ep <- function(meter_line, card_diff = 0, win_pct_diff = 0, model = multinomial_model) {
+predict_lineout_ep <- function(
+    meter_line,
+    card_diff = 0,
+    win_pct_diff = 0,
+    less_than_2_min = 0,
+    model = multinomial_model
+) {
   new_data <- tibble(
     meter_line = meter_line,
     meter_line_factor = factor(meter_line, levels = levels(sampled_phase_data$meter_line_factor)),
     Card_Diff = card_diff,
-    WinPct_Diff = win_pct_diff
+    WinPct_Diff = win_pct_diff,
+    Less_Than_2_Min = less_than_2_min
   )
 
   probs <- predict(model, newdata = new_data, type = "probs")
@@ -89,15 +98,21 @@ print(results_multi)
 # zone centers for interpolation
 plot_data <- tibble(
   meter_line = meter_lines,
-  expected_points = predict_lineout_ep(meter_lines, card_diff = 0, win_pct_diff = 0)
+  expected_points = predict_lineout_ep(
+    meter_lines,
+    card_diff = 0,
+    win_pct_diff = 0,
+    less_than_2_min = 0
+  )
 )
 
-build_lineout_smoother <- function(card_diff = 0, win_pct_diff = 0) {
+build_lineout_smoother <- function(card_diff = 0, win_pct_diff = 0, less_than_2_min = 0) {
 # helper: monotone smoother over zone-level ep
   ep_zone <- predict_lineout_ep(
     meter_lines,
     card_diff = card_diff,
     win_pct_diff = win_pct_diff,
+    less_than_2_min = less_than_2_min,
     model = multinomial_model
   )
 
@@ -115,7 +130,7 @@ ep_by_meter_line <- ggplot(ep_by_meter_line_data, aes(x = meter_line, y = expect
   geom_point(size = 3, color = "steelblue") +
   labs(
     title = "Expected Points by Field Zone",
-    subtitle = "Interpolated lineout EP. Card_Diff = 0, WinPct_Diff = 0",
+    subtitle = "Interpolated lineout EP. Card_Diff = 0, WinPct_Diff = 0, Less_Than_2_Min = 0",
     x = "Distance from try line (m)",
     y = "Expected Points"
   ) +
@@ -123,4 +138,3 @@ ep_by_meter_line <- ggplot(ep_by_meter_line_data, aes(x = meter_line, y = expect
 
 ggsave("plots/ep_by_meter_line.png", ep_by_meter_line,
        width = 10, height = 8, dpi = 300)
-

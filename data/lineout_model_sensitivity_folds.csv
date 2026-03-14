@@ -1,21 +1,21 @@
 "model_key","model_label","fold","log_loss","brier"
-"lineout_baseline","Baseline: meter + Card + WinPct",1,1.82750152266604,0.808574632665013
-"lineout_baseline","Baseline: meter + Card + WinPct",2,1.78299855541491,0.800360621899873
-"lineout_baseline","Baseline: meter + Card + WinPct",3,1.82964972942369,0.81754538737703
-"lineout_baseline","Baseline: meter + Card + WinPct",4,1.77920551421456,0.807511562346795
-"lineout_baseline","Baseline: meter + Card + WinPct",5,1.81038399187841,0.817706173452874
-"lineout_plus_interaction","Baseline + Card x WinPct",1,1.78037035657894,0.80327726796049
-"lineout_plus_interaction","Baseline + Card x WinPct",2,1.8958114655124,0.841569663942824
-"lineout_plus_interaction","Baseline + Card x WinPct",3,1.742909402332,0.789812293220961
-"lineout_plus_interaction","Baseline + Card x WinPct",4,1.86664257224595,0.815774456981232
-"lineout_plus_interaction","Baseline + Card x WinPct",5,1.80253221890491,0.804907934670504
-"lineout_separate_strengths","Baseline with separate team strengths",1,1.76552047138804,0.803588028552768
-"lineout_separate_strengths","Baseline with separate team strengths",2,1.77225051527655,0.810219869953836
-"lineout_separate_strengths","Baseline with separate team strengths",3,1.78788634295936,0.804740888017187
-"lineout_separate_strengths","Baseline with separate team strengths",4,1.87741861422665,0.831670311447894
-"lineout_separate_strengths","Baseline with separate team strengths",5,1.77695596200575,0.787962829897269
-"lineout_plus_time","Baseline + time remaining",1,1.67774932335195,0.763311809360819
-"lineout_plus_time","Baseline + time remaining",2,1.73706645907432,0.769586516054186
-"lineout_plus_time","Baseline + time remaining",3,1.67332549410753,0.764459083609143
-"lineout_plus_time","Baseline + time remaining",4,1.79731685126641,0.802424103262221
-"lineout_plus_time","Baseline + time remaining",5,1.68679712730746,0.776459713224338
+"lineout_baseline","Baseline: meter + Card + WinPct + <2min",1,1.77378916355863,0.788395688518514
+"lineout_baseline","Baseline: meter + Card + WinPct + <2min",2,1.76991722758341,0.775841647296341
+"lineout_baseline","Baseline: meter + Card + WinPct + <2min",3,1.75655932275698,0.787713081418964
+"lineout_baseline","Baseline: meter + Card + WinPct + <2min",4,1.73424935432555,0.786970661977689
+"lineout_baseline","Baseline: meter + Card + WinPct + <2min",5,1.74883690013611,0.788939488075667
+"lineout_plus_interaction","Baseline + Card x WinPct",1,1.73029582164611,0.775807808838625
+"lineout_plus_interaction","Baseline + Card x WinPct",2,1.85578617381212,0.814574747075545
+"lineout_plus_interaction","Baseline + Card x WinPct",3,1.6825353211619,0.762047458849198
+"lineout_plus_interaction","Baseline + Card x WinPct",4,1.81159840323703,0.794800554487925
+"lineout_plus_interaction","Baseline + Card x WinPct",5,1.75230669270243,0.783916090841792
+"lineout_separate_strengths","Baseline with separate team strengths",1,1.71705089845857,0.782516229839323
+"lineout_separate_strengths","Baseline with separate team strengths",2,1.73311409523526,0.790825615833996
+"lineout_separate_strengths","Baseline with separate team strengths",3,1.75782952303045,0.778479688680864
+"lineout_separate_strengths","Baseline with separate team strengths",4,1.78126641023965,0.791009098238802
+"lineout_separate_strengths","Baseline with separate team strengths",5,1.71790312471784,0.769437053780866
+"lineout_plus_time","Baseline + continuous time",1,1.67413669728196,0.761492980906112
+"lineout_plus_time","Baseline + continuous time",2,1.72904753475915,0.771689358539277
+"lineout_plus_time","Baseline + continuous time",3,1.66253546932435,0.759087268976297
+"lineout_plus_time","Baseline + continuous time",4,1.78789354141663,0.796630329538074
+"lineout_plus_time","Baseline + continuous time",5,1.70466359401292,0.769902388372297
