@@ -24,7 +24,13 @@ if (is.na(n_cores)) {
 n_cores <- max(1L, as.integer(n_cores))
 message("Decision bootstrap: B = ", boot_B, ", cores = ", n_cores)
 
-set.seed(20260313)
+# project-wide reproducibility seed (override via EP_SEED)
+ep_seed <- suppressWarnings(as.integer(Sys.getenv("EP_SEED", "20260313")))
+if (is.na(ep_seed)) {
+  warning("Invalid EP_SEED; defaulting to 20260313")
+  ep_seed <- 20260313L
+}
+set.seed(ep_seed)
 
 # marker location used in case-study section
 marker_x <- 20

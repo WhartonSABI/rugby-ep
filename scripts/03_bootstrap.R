@@ -1,6 +1,14 @@
 # run from project root; depends on 02_ep-lineout.R
 source("scripts/02_ep-lineout.R")
 
+# project-wide reproducibility seed (override via EP_SEED)
+ep_seed <- suppressWarnings(as.integer(Sys.getenv("EP_SEED", "20260313")))
+if (is.na(ep_seed)) {
+  warning("Invalid EP_SEED; defaulting to 20260313")
+  ep_seed <- 20260313L
+}
+set.seed(ep_seed)
+
 ###########################
 ### CLUSTERED BOOTSTRAP ###
 ###########################
