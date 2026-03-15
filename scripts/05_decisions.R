@@ -89,7 +89,7 @@ for (shift in y_shifts) {
     ) +
     theme_minimal(base_size = 14)
 
-  p
+  print(p)
   
   if (shift != 0) {
     p <- p + theme(legend.position = "none")
