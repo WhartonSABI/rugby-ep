@@ -376,57 +376,63 @@ print(ep_table)
 # Continuation-aware EP surface for kicks.
 grid$expected_points <- predict_kick_ep(model, grid, miss_lookup)
 
-# Data set to bootstrap
+run_miss_component_bootstrap <- tolower(Sys.getenv("EP_RUN_MISS_COMPONENT_BOOTSTRAP", "false")) %in%
+  c("1", "true", "yes")
 
-kick_miss_ep <- phase_data_restarts %>%
-  select(points, ID)
+if (run_miss_component_bootstrap) {
+  # Data set to bootstrap
+  kick_miss_ep <- phase_data_restarts %>%
+    select(points, ID)
 
-# number of bootstrap replicates
-B <- 1000L
+  # number of bootstrap replicates
+  B <- 1000L
 
-# one bootstrap replicate
-one_boot_ep <- function(b) {
-  idx <- sample.int(nrow(kick_miss_ep), size = nrow(kick_miss_ep), replace = TRUE)
-  mean(kick_miss_ep$points[idx])
+  # one bootstrap replicate
+  one_boot_ep <- function(b) {
+    idx <- sample.int(nrow(kick_miss_ep), size = nrow(kick_miss_ep), replace = TRUE)
+    mean(kick_miss_ep$points[idx])
+  }
+
+  # run bootstrap
+  boot_ep <- sapply(seq_len(B), one_boot_ep)
+
+  # 95% percentile CI
+  ep_ci <- quantile(boot_ep, probs = c(0.025, 0.975))
+
+  cat("Mean EP:", mean(boot_ep), "\n")
+  cat("95% CI: [", ep_ci[1], ",", ep_ci[2], "]\n")
+
+  boot_df <- data.frame(ep = boot_ep)
+
+  # Optional diagnostic plot for continuation-only uncertainty.
+  missed_bootstrap <- ggplot(boot_df, aes(x = ep)) +
+    geom_histogram(fill = "steelblue", color = "white", bins = 40) +
+    geom_vline(xintercept = mean(boot_ep), color = "steelblue",
+               linewidth = 1, linetype = "dashed") +
+    geom_vline(xintercept = ep_ci[1], color = "red",
+               linewidth = 1, linetype = "dashed") +
+    geom_vline(xintercept = ep_ci[2], color = "red",
+               linewidth = 1, linetype = "dashed") +
+    annotate("text", x = mean(boot_ep), y = Inf,
+             label = sprintf("Mean = %.2f", mean(boot_ep)),
+             hjust = -0.1, vjust = 2, color = "steelblue") +
+    annotate("text", x = ep_ci[1], y = Inf,
+             label = sprintf("2.5%% = %.2f", ep_ci[1]),
+             hjust = 1.1, vjust = 2, color = "red") +
+    annotate("text", x = ep_ci[2], y = Inf,
+             label = sprintf("97.5%% = %.2f", ep_ci[2]),
+             hjust = -0.1, vjust = 2, color = "red") +
+    labs(
+      title = "Bootstrap Distribution of Mean Expected Points",
+      x = "Mean Expected Points",
+      y = "Count"
+    ) +
+    theme_minimal()
+
+  missed_bootstrap
+
+  ggsave("plots/missed_bootstrap.png", missed_bootstrap,
+         width = 10, height = 8, dpi = 300)
+} else {
+  message("Skipping continuation-only bootstrap. Set EP_RUN_MISS_COMPONENT_BOOTSTRAP=true to enable it.")
 }
-
-# run bootstrap
-boot_ep <- sapply(seq_len(B), one_boot_ep)
-
-# 95% percentile CI
-ep_ci <- quantile(boot_ep, probs = c(0.025, 0.975))
-
-cat("Mean EP:", mean(boot_ep), "\n")
-cat("95% CI: [", ep_ci[1], ",", ep_ci[2], "]\n")
-
-boot_df <- data.frame(ep = boot_ep)
-
-# Missed Kick Bootstrap
-missed_bootstrap <- ggplot(boot_df, aes(x = ep)) +
-  geom_histogram(fill = "steelblue", color = "white", bins = 40) +
-  geom_vline(xintercept = mean(boot_ep), color = "steelblue", 
-             linewidth = 1, linetype = "dashed") +
-  geom_vline(xintercept = ep_ci[1], color = "red", 
-             linewidth = 1, linetype = "dashed") +
-  geom_vline(xintercept = ep_ci[2], color = "red", 
-             linewidth = 1, linetype = "dashed") +
-  annotate("text", x = mean(boot_ep), y = Inf, 
-           label = sprintf("Mean = %.2f", mean(boot_ep)),
-           hjust = -0.1, vjust = 2, color = "steelblue") +
-  annotate("text", x = ep_ci[1], y = Inf, 
-           label = sprintf("2.5%% = %.2f", ep_ci[1]),
-           hjust = 1.1, vjust = 2, color = "red") +
-  annotate("text", x = ep_ci[2], y = Inf, 
-           label = sprintf("97.5%% = %.2f", ep_ci[2]),
-           hjust = -0.1, vjust = 2, color = "red") +
-  labs(
-    title = "Bootstrap Distribution of Mean Expected Points",
-    x = "Mean Expected Points",
-    y = "Count"
-  ) +
-  theme_minimal()
-
-missed_bootstrap
-
-ggsave("plots/missed_bootstrap.png", missed_bootstrap,
-       width = 10, height = 8, dpi = 300)
