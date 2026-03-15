@@ -16,7 +16,7 @@ add_kick_features <- function(df) {
 }
 
 location_center_lookup <- c(
-  "5m-Goal (opp)" = 2.5,
+  "5m-Goal (opp)" = 5,
   "22m-5m (opp)" = 13.5,
   "10m-22m (opp)" = 31.0,
   "Half-10m (opp)" = 45.0,
@@ -382,7 +382,7 @@ kick_miss_ep <- phase_data_restarts %>%
   select(points, ID)
 
 # number of bootstrap replicates
-B <- as.integer(Sys.getenv("EP_MISS_BOOT_B", unset = "1000"))
+B <- 1000L
 
 # one bootstrap replicate
 one_boot_ep <- function(b) {

@@ -162,7 +162,7 @@ phase_data <- phase_data %>%
 location_names <- c("5m-Goal (opp)", "22m-5m (opp)", "10m-22m (opp)",
                     "Half-10m (opp)","10m-Half (own)", "22m-10m (own)",
                     "5m-22m (own)", "Goal-5m (own)")
-location_meters <- c(2.5, 13.5, 31, 45, 55, 69, 86.5, 97.5)
+location_meters <- c(5, 13.5, 31, 45, 55, 69, 86.5, 97.5)
 
 # zone boundaries in meters from opponent try line
 zone_boundaries_m <- c(0, 5, 22, 40, 50, 60, 78, 95, 100)

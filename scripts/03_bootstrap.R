@@ -8,7 +8,7 @@ source("scripts/02_ep-lineout.R")
 # clustered bootstrap
 # 1) resample matches with replacement
 # 2) sample one row per run_id within each match
-boot_B <- as.integer(Sys.getenv("EP_BOOT_B", unset = "1000"))
+boot_B <- 1000L
 n_cores <- as.integer(Sys.getenv("EP_BOOT_CORES", unset = NA_character_))
 if (is.na(n_cores)) {
   detected_cores <- suppressWarnings(parallel::detectCores())

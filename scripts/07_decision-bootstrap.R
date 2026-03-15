@@ -11,7 +11,7 @@ library(ggplot2)
 ### JOINT DECISION BOOTSTRAP ###
 ###############################
 
-boot_B <- as.integer(Sys.getenv("EP_DECISION_BOOT_B", unset = "1000"))
+boot_B <- 1000L
 n_cores <- as.integer(Sys.getenv("EP_DECISION_BOOT_CORES", unset = NA_character_))
 if (is.na(n_cores)) {
   detected_cores <- suppressWarnings(parallel::detectCores())
