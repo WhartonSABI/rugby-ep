@@ -41,6 +41,25 @@ marker_d_touch <- as.integer(Sys.getenv("EP_MARKER_D_TOUCH", "20"))
 dead_on_x <- 35
 dead_on_y_vals <- seq(5, 65, by = 1)
 
+# case-study penalties used in the all-decisions table
+case_study_data <- readr::read_csv(
+  "data/All Blacks vs South Africa Game Sep 16th.csv",
+  show_col_types = FALSE
+) %>%
+  rename(
+    x = `x location`,
+    y = `y location`
+  ) %>%
+  transmute(
+    Team = recode(Team, "AB" = "NZ"),
+    Decision = tolower(Decision),
+    x = as.numeric(x),
+    y = as.numeric(y),
+    y_after_shift = as.numeric(distance_from_try_after_shift),
+    less_than_2_min = as.integer(Less_Than_2_Min_val)
+  )
+n_case <- nrow(case_study_data)
+
 if (!(marker_d_touch %in% d_touch_vals)) {
   stop("EP_MARKER_D_TOUCH must be one of: ", paste(d_touch_vals, collapse = ", "))
 }
@@ -132,7 +151,10 @@ one_joint_boot <- function(b) {
       miss_ep = NA_real_,
       kick_ep = NA_real_,
       delta_ep = rep(NA_real_, length(y_shifts)),
-      kick_ep_dead_on = rep(NA_real_, length(dead_on_y_vals))
+      kick_ep_dead_on = rep(NA_real_, length(dead_on_y_vals)),
+      lineout_ep_case = rep(NA_real_, n_case),
+      kick_ep_case = rep(NA_real_, n_case),
+      delta_ep_case = rep(NA_real_, n_case)
     ))
   }
 
@@ -161,6 +183,38 @@ one_joint_boot <- function(b) {
   miss_ep_dead_on <- miss_ep_from_y(dead_on_y_vals, boot_miss_lookup)
   kick_ep_dead_on <- as.numeric(3 * p_make_dead_on + (1 - p_make_dead_on) * miss_ep_dead_on)
 
+  # all-decisions case-study quantities
+  lineout_smoother_l2m0 <- build_lineout_smoother_boot(
+    boot_lineout_model,
+    card_diff = 0,
+    win_pct_diff = 0,
+    less_than_2_min = 0
+  )
+  lineout_smoother_l2m1 <- build_lineout_smoother_boot(
+    boot_lineout_model,
+    card_diff = 0,
+    win_pct_diff = 0,
+    less_than_2_min = 1
+  )
+  case_y <- pmin(pmax(case_study_data$y_after_shift, min(meter_lines)), max(meter_lines))
+  lineout_ep_case_l2m0 <- as.numeric(lineout_smoother_l2m0(case_y))
+  lineout_ep_case_l2m1 <- as.numeric(lineout_smoother_l2m1(case_y))
+  max_lineout_ep_l2m0 <- max(as.numeric(lineout_smoother_l2m0(meter_lines)), na.rm = TRUE)
+  max_lineout_ep_l2m1 <- max(as.numeric(lineout_smoother_l2m1(meter_lines)), na.rm = TRUE)
+  lineout_ep_case <- ifelse(
+    case_study_data$less_than_2_min == 1L,
+    pmin(lineout_ep_case_l2m1, max_lineout_ep_l2m1),
+    pmin(lineout_ep_case_l2m0, max_lineout_ep_l2m0)
+  )
+  kick_ep_case <- as.numeric(
+    predict_kick_ep(
+      boot_kick_model,
+      case_study_data %>% select(x, y),
+      boot_miss_lookup
+    )
+  )
+  delta_ep_case <- lineout_ep_case - kick_ep_case
+
   delta_ep <- lineout_ep - kick_ep
 
   list(
@@ -169,7 +223,10 @@ one_joint_boot <- function(b) {
     miss_ep = as.numeric(miss_ep),
     kick_ep = as.numeric(kick_ep),
     delta_ep = delta_ep,
-    kick_ep_dead_on = kick_ep_dead_on
+    kick_ep_dead_on = kick_ep_dead_on,
+    lineout_ep_case = lineout_ep_case,
+    kick_ep_case = kick_ep_case,
+    delta_ep_case = delta_ep_case
   )
 }
 
@@ -182,6 +239,9 @@ boot_results <- parallel::mclapply(
 lineout_ep_boot <- do.call(rbind, lapply(boot_results, `[[`, "lineout_ep"))
 delta_ep_boot <- do.call(rbind, lapply(boot_results, `[[`, "delta_ep"))
 kick_ep_dead_on_boot <- do.call(rbind, lapply(boot_results, `[[`, "kick_ep_dead_on"))
+lineout_ep_case_boot <- do.call(rbind, lapply(boot_results, `[[`, "lineout_ep_case"))
+kick_ep_case_boot <- do.call(rbind, lapply(boot_results, `[[`, "kick_ep_case"))
+delta_ep_case_boot <- do.call(rbind, lapply(boot_results, `[[`, "delta_ep_case"))
 kicking_boot <- tibble(
   p_make = as.numeric(sapply(boot_results, `[[`, "p_make")),
   miss_ep = as.numeric(sapply(boot_results, `[[`, "miss_ep")),
@@ -192,6 +252,9 @@ valid_delta <- !is.na(delta_ep_boot[, 1])
 lineout_ep_boot <- lineout_ep_boot[valid_delta, , drop = FALSE]
 delta_ep_boot <- delta_ep_boot[valid_delta, , drop = FALSE]
 kick_ep_dead_on_boot <- kick_ep_dead_on_boot[valid_delta, , drop = FALSE]
+lineout_ep_case_boot <- lineout_ep_case_boot[valid_delta, , drop = FALSE]
+kick_ep_case_boot <- kick_ep_case_boot[valid_delta, , drop = FALSE]
+delta_ep_case_boot <- delta_ep_case_boot[valid_delta, , drop = FALSE]
 kicking_boot <- kicking_boot[valid_delta, , drop = FALSE]
 
 if (nrow(delta_ep_boot) == 0) {
@@ -237,10 +300,55 @@ kick_dead_on_summary <- tibble(
   kick_ep_hi_97_5 = apply(kick_ep_dead_on_boot, 2, quantile, probs = 0.975, na.rm = TRUE)
 )
 
+regret_case_boot <- matrix(NA_real_, nrow = nrow(delta_ep_case_boot), ncol = n_case)
+for (j in seq_len(n_case)) {
+  if (case_study_data$Decision[j] == "lineout") {
+    regret_case_boot[, j] <- pmax(kick_ep_case_boot[, j] - lineout_ep_case_boot[, j], 0)
+  } else {
+    regret_case_boot[, j] <- pmax(lineout_ep_case_boot[, j] - kick_ep_case_boot[, j], 0)
+  }
+}
+
+case_all_penalties_bootstrap <- case_study_data %>%
+  transmute(
+    Team,
+    Decision,
+    optimal_decision = ifelse(
+      apply(delta_ep_case_boot, 2, mean, na.rm = TRUE) > 0,
+      "lineout",
+      "kick"
+    ),
+    lineout_ep_mean = apply(lineout_ep_case_boot, 2, mean, na.rm = TRUE),
+    lineout_ep_lo_2_5 = apply(lineout_ep_case_boot, 2, quantile, probs = 0.025, na.rm = TRUE),
+    lineout_ep_hi_97_5 = apply(lineout_ep_case_boot, 2, quantile, probs = 0.975, na.rm = TRUE),
+    kick_ep_mean = apply(kick_ep_case_boot, 2, mean, na.rm = TRUE),
+    kick_ep_lo_2_5 = apply(kick_ep_case_boot, 2, quantile, probs = 0.025, na.rm = TRUE),
+    kick_ep_hi_97_5 = apply(kick_ep_case_boot, 2, quantile, probs = 0.975, na.rm = TRUE),
+    delta_ep_mean = apply(delta_ep_case_boot, 2, mean, na.rm = TRUE),
+    delta_ep_lo_2_5 = apply(delta_ep_case_boot, 2, quantile, probs = 0.025, na.rm = TRUE),
+    delta_ep_hi_97_5 = apply(delta_ep_case_boot, 2, quantile, probs = 0.975, na.rm = TRUE),
+    pr_lineout_better = apply(delta_ep_case_boot, 2, function(x) mean(x > 0, na.rm = TRUE)),
+    R_mean = apply(regret_case_boot, 2, mean, na.rm = TRUE),
+    R_lo_2_5 = apply(regret_case_boot, 2, quantile, probs = 0.025, na.rm = TRUE),
+    R_hi_97_5 = apply(regret_case_boot, 2, quantile, probs = 0.975, na.rm = TRUE)
+  )
+
+case_summary_metrics_bootstrap <- tibble(
+  total_regret_mean = sum(case_all_penalties_bootstrap$R_mean, na.rm = TRUE),
+  total_regret_lo_2_5 = quantile(rowSums(regret_case_boot, na.rm = TRUE), 0.025, na.rm = TRUE),
+  total_regret_hi_97_5 = quantile(rowSums(regret_case_boot, na.rm = TRUE), 0.975, na.rm = TRUE),
+  prop_optimal = mean(
+    case_all_penalties_bootstrap$Decision == case_all_penalties_bootstrap$optimal_decision,
+    na.rm = TRUE
+  )
+)
+
 cat("\nPrimary uncertainty summary (lineout EP, kick-attempt EP, decision delta):\n")
 print(component_summary)
 cat("\nShift summary (first rows):\n")
 print(head(shift_summary, 10))
+cat("\nAll-penalties bootstrap summary (first rows):\n")
+print(head(case_all_penalties_bootstrap, 10))
 
 boot_outputs <- list(
   B = boot_B,
@@ -251,11 +359,16 @@ boot_outputs <- list(
   y_shifts = y_shifts,
   lineout_ep_boot = lineout_ep_boot,
   kick_ep_dead_on_boot = kick_ep_dead_on_boot,
+  lineout_ep_case_boot = lineout_ep_case_boot,
+  kick_ep_case_boot = kick_ep_case_boot,
+  delta_ep_case_boot = delta_ep_case_boot,
   kicking_boot = kicking_boot,
   delta_ep_boot = delta_ep_boot,
   component_summary = component_summary,
   shift_summary = shift_summary,
-  kick_dead_on_summary = kick_dead_on_summary
+  kick_dead_on_summary = kick_dead_on_summary,
+  case_all_penalties_bootstrap = case_all_penalties_bootstrap,
+  case_summary_metrics_bootstrap = case_summary_metrics_bootstrap
 )
 
 saveRDS(boot_outputs, "data/decision_bootstrap.rds")
@@ -263,6 +376,8 @@ write.csv(component_summary, "data/decision_bootstrap_primary_summary.csv", row.
 write.csv(component_summary, "data/decision_bootstrap_marker_summary.csv", row.names = FALSE)
 write.csv(shift_summary, "data/decision_bootstrap_shift_summary.csv", row.names = FALSE)
 write.csv(kick_dead_on_summary, "data/kick_attempt_dead_on_bootstrap_summary.csv", row.names = FALSE)
+write.csv(case_all_penalties_bootstrap, "data/case_study_all_penalties_bootstrap_summary.csv", row.names = FALSE)
+write.csv(case_summary_metrics_bootstrap, "data/case_study_summary_metrics_bootstrap.csv", row.names = FALSE)
 
 # Plot 1: kick-attempt EP uncertainty vs dead-center distance
 kick_dead_on_point <- tibble(
