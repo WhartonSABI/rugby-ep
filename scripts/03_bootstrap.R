@@ -16,7 +16,7 @@ set.seed(ep_seed)
 # clustered bootstrap
 # 1) resample matches with replacement
 # 2) sample one row per run_id within each match
-boot_B <- 1000L
+boot_B <- 2000L
 n_cores <- as.integer(Sys.getenv("EP_BOOT_CORES", unset = NA_character_))
 if (is.na(n_cores)) {
   detected_cores <- suppressWarnings(parallel::detectCores())

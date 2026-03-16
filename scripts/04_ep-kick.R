@@ -393,7 +393,7 @@ if (run_miss_component_bootstrap) {
     select(points, ID)
 
   # number of bootstrap replicates
-  B <- 1000L
+  B <- 2000L
 
   # one bootstrap replicate
   one_boot_ep <- function(b) {

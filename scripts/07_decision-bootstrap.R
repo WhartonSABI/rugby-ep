@@ -11,7 +11,7 @@ library(ggplot2)
 ### JOINT DECISION BOOTSTRAP ###
 ###############################
 
-boot_B <- 1000L
+boot_B <- 2000L
 n_cores <- as.integer(Sys.getenv("EP_DECISION_BOOT_CORES", unset = NA_character_))
 if (is.na(n_cores)) {
   detected_cores <- suppressWarnings(parallel::detectCores())
@@ -310,22 +310,14 @@ delta_boot_plot <- ggplot(tibble(delta_ep = delta_marker), aes(x = delta_ep)) +
 ggsave("plots/delta_bootstrap_marker.png", delta_boot_plot, width = 10, height = 7, dpi = 300)
 
 # Plot 3: DeltaEP vs meters gained with 95% joint-bootstrap band
-point_est_curve <- shift_results %>%
-  transmute(
-    d_touch = -y_shift,
-    delta_point_est = lineout_EP - kick_EP
-  )
-
 delta_shift_plot <- shift_summary %>%
-  left_join(point_est_curve, by = "d_touch") %>%
   ggplot(aes(x = d_touch, y = delta_mean)) +
   geom_ribbon(aes(ymin = delta_lo_2_5, ymax = delta_hi_97_5), fill = "#A8DADC", alpha = 0.5) +
   geom_line(color = "#1D3557", linewidth = 1.2) +
-  geom_line(aes(y = delta_point_est), color = "#E76F51", linewidth = 1, linetype = "dashed") +
   geom_hline(yintercept = 0, color = "black", linewidth = 0.8) +
   labs(
     title = expression(paste("Decision Curve with Joint Uncertainty (", Delta, "EP)")),
-    subtitle = "Solid: bootstrap mean, band: 95% CI, dashed: point estimate",
+    subtitle = "Line: bootstrap mean, band: 95% CI",
     x = "Meters gained to touch",
     y = expression(Delta * "EP (Lineout - Kick)")
   ) +

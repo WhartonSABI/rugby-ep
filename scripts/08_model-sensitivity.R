@@ -405,10 +405,10 @@ kick_cv_summary <- kick_cv_raw %>%
   )
 
 marker_kick <- tibble(
-  x = 20,
-  y = 30,
-  angle = atan2(abs(20 - 35), 30) * (180 / pi),
-  Distance = sqrt((20 - 35)^2 + 30^2)
+  x = 16,
+  y = 40,
+  angle = atan2(abs(16 - 35), 40) * (180 / pi),
+  Distance = sqrt((16 - 35)^2 + 40^2)
 )
 
 kick_fits <- lapply(kick_models, function(model_spec) {
