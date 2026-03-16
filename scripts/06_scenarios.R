@@ -41,8 +41,8 @@ ggsave("plots/baseline_points_diff.png", baseline_points_diff,
 
 # baseline scenario with marker
 
-marker_x <- 20
-marker_y <- 30
+marker_x <- 16
+marker_y <- 40
 
 baseline_with_marker <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +

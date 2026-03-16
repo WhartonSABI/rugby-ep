@@ -33,8 +33,8 @@ if (is.na(ep_seed)) {
 set.seed(ep_seed)
 
 # marker location used in case-study section
-marker_x <- 20
-marker_y <- 30
+marker_x <- 16
+marker_y <- 40
 y_shifts <- seq(0, -30, by = -1)
 d_touch_vals <- -y_shifts
 marker_d_touch <- as.integer(Sys.getenv("EP_MARKER_D_TOUCH", "20"))

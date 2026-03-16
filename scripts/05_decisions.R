@@ -103,8 +103,8 @@ for (shift in y_shifts) {
 ### LINEOUT SHIFTS ###
 ######################
 
-marker_x <- 20
-marker_y <- 30
+marker_x <- 16
+marker_y <- 40
 
 y_shifts <- seq(0, -30, by = -1)
 
