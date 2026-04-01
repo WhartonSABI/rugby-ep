@@ -1,5 +1,5 @@
 "model_key","model_label","ep_mean_abs_diff_vs_baseline","ep_max_abs_diff_vs_baseline"
 "lineout_baseline","Baseline: meter + Card + WinPct + <2min",0,0
-"lineout_plus_interaction","Baseline + Card x WinPct",0.0750293120771008,0.339062572093967
-"lineout_separate_strengths","Baseline with separate team strengths",0.0205313852822086,0.049541996083704
-"lineout_plus_time","Baseline + continuous time",0.05491569232721,0.149131255570004
+"lineout_plus_interaction","Baseline + Card x WinPct",0.0795339142931828,0.365159040900298
+"lineout_separate_strengths","Baseline with separate team strengths",0.0337335196041584,0.0850829511486484
+"lineout_plus_time","Baseline + continuous time",0.059282579791992,0.14521837103101

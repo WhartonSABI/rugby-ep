@@ -19,6 +19,9 @@ if (is.na(ep_seed)) {
 }
 set.seed(ep_seed)
 
+# pre-specified running win-percentage shrinkage prior (m pseudo-games at .500)
+winpct_prior_games <- 2
+
 ############################
 ### METRIC CALCULATIONS  ###
 ############################
@@ -75,83 +78,6 @@ phase_points <- phase_raw %>%
     points = ifelse(is.na(points), 0, points)
   )
 
-last_play <- phase_points %>%
-  group_by(Round, Home, Away) %>%
-  filter(ID == max(ID)) %>%
-  ungroup() %>%
-  mutate(
-    last_play_points = str_extract(Outcome, "[-+]?\\d+") %>% as.numeric(),
-    last_play_points = ifelse(is.na(last_play_points), 0, last_play_points),
-    score_change = last_play_points,
-    final_points_diff = Points_Difference + score_change,
-    final_points_diff_home = if_else(
-      Team_In_Poss == "Home",
-      final_points_diff,
-      -final_points_diff
-    )
-  ) %>%
-  select(Round, Home, Away, final_points_diff_home) %>%
-  distinct() %>%
-  pivot_longer(
-    cols = c(Home, Away),
-    names_to = "Side",
-    values_to = "Team"
-  ) %>%
-  mutate(
-    Win = case_when(
-      Side == "Home" & final_points_diff_home > 0 ~ 1,
-      Side == "Home" & final_points_diff_home <= 0 ~ 0,
-      Side == "Away" & final_points_diff_home < 0 ~ 1,
-      Side == "Away" & final_points_diff_home >= 0 ~ 0
-    ),
-    Round = as.numeric(Round)
-  ) %>%
-  arrange(Team, Round) %>%
-  group_by(Team) %>%
-  mutate(
-    Games_Played = lag(row_number(), default = 0),
-    Wins_Before = lag(cumsum(Win), default = 0),
-    WinPct_Before = if_else(Games_Played == 0, 0.5, Wins_Before / Games_Played)
-  ) %>%
-  ungroup()
-
-lineout_full <- phase_points %>%
-  filter(Play_Start == "Lineout", Phase == 1) %>%
-  mutate(
-    Team_for_join = case_when(
-      Team_In_Poss == "Home" ~ Home,
-      Team_In_Poss == "Away" ~ Away
-    ),
-    Opponent = if_else(Team_In_Poss == "Home", Away, Home)
-  ) %>%
-  left_join(
-    last_play %>% select(Team, Round, WinPct_Before),
-    by = c("Team_for_join" = "Team", "Round" = "Round")
-  ) %>%
-  left_join(
-    last_play %>%
-      select(Team, Round, WinPct_Before) %>%
-      rename(Opponent = Team, Opponent_WinPct = WinPct_Before),
-    by = c("Opponent", "Round")
-  ) %>%
-  mutate(
-    WinPct_Diff = WinPct_Before - Opponent_WinPct,
-    Card_Diff = (Yellow_Cards_Opp + Red_Cards_Opp) - (Yellow_Cards_Own + Red_Cards_Own),
-    Seconds_Remaining_Half = if_else(
-      Seconds_Remaining > 2400,
-      Seconds_Remaining - 2400,
-      Seconds_Remaining
-    ),
-    Less_Than_2_Min = if_else(Seconds_Remaining_Half < 120, 1, 0)
-  ) %>%
-  arrange(Round, Home, Away, ID) %>%
-  group_by(Round, Home, Away) %>%
-  mutate(
-    run_id = cumsum(c(TRUE, diff(Points_Difference) != 0 | Outcome[-1] != Outcome[-n()])),
-    n_same = ave(run_id, run_id, FUN = length)
-  ) %>%
-  ungroup()
-
 location_names <- c(
   "5m-Goal (opp)", "22m-5m (opp)", "10m-22m (opp)", "Half-10m (opp)",
   "10m-Half (own)", "22m-10m (own)", "5m-22m (own)", "Goal-5m (own)"
@@ -159,11 +85,95 @@ location_names <- c(
 location_meters <- c(5, 13.5, 31, 45, 55, 69, 86.5, 97.5)
 lookup <- setNames(location_meters, location_names)
 
-lineout_full <- lineout_full %>%
-  mutate(
-    meter_line = as.numeric(lookup[Location]),
-    match_id = paste(Round, Home, Away, sep = "__")
-  )
+build_lineout_dataset <- function(phase_points_df, winpct_prior_games = 2) {
+  last_play <- phase_points_df %>%
+    group_by(Round, Home, Away) %>%
+    filter(ID == max(ID)) %>%
+    ungroup() %>%
+    mutate(
+      last_play_points = str_extract(Outcome, "[-+]?\\d+") %>% as.numeric(),
+      last_play_points = ifelse(is.na(last_play_points), 0, last_play_points),
+      score_change = last_play_points,
+      final_points_diff = Points_Difference + score_change,
+      final_points_diff_home = if_else(
+        Team_In_Poss == "Home",
+        final_points_diff,
+        -final_points_diff
+      )
+    ) %>%
+    select(Round, Home, Away, final_points_diff_home) %>%
+    distinct() %>%
+    pivot_longer(
+      cols = c(Home, Away),
+      names_to = "Side",
+      values_to = "Team"
+    ) %>%
+    mutate(
+      Win = case_when(
+        Side == "Home" & final_points_diff_home > 0 ~ 1,
+        Side == "Home" & final_points_diff_home <= 0 ~ 0,
+        Side == "Away" & final_points_diff_home < 0 ~ 1,
+        Side == "Away" & final_points_diff_home >= 0 ~ 0
+      ),
+      Round = as.numeric(Round)
+    ) %>%
+    arrange(Team, Round) %>%
+    group_by(Team) %>%
+    mutate(
+      Games_Played = lag(row_number(), default = 0),
+      Wins_Before = lag(cumsum(Win), default = 0),
+      WinPct_Before = (Wins_Before + 0.5 * winpct_prior_games) / (Games_Played + winpct_prior_games)
+    ) %>%
+    ungroup()
+
+  lineout_df <- phase_points_df %>%
+    filter(Play_Start == "Lineout", Phase == 1) %>%
+    mutate(
+      Team_for_join = case_when(
+        Team_In_Poss == "Home" ~ Home,
+        Team_In_Poss == "Away" ~ Away
+      ),
+      Opponent = if_else(Team_In_Poss == "Home", Away, Home)
+    ) %>%
+    left_join(
+      last_play %>% select(Team, Round, WinPct_Before),
+      by = c("Team_for_join" = "Team", "Round" = "Round")
+    ) %>%
+    left_join(
+      last_play %>%
+        select(Team, Round, WinPct_Before) %>%
+        rename(Opponent = Team, Opponent_WinPct = WinPct_Before),
+      by = c("Opponent", "Round")
+    ) %>%
+    mutate(
+      WinPct_Diff = WinPct_Before - Opponent_WinPct,
+      Card_Diff = (Yellow_Cards_Opp + Red_Cards_Opp) - (Yellow_Cards_Own + Red_Cards_Own),
+      Seconds_Remaining_Half = if_else(
+        Seconds_Remaining > 2400,
+        Seconds_Remaining - 2400,
+        Seconds_Remaining
+      ),
+      Less_Than_2_Min = if_else(Seconds_Remaining_Half < 120, 1, 0)
+    ) %>%
+    arrange(Round, Home, Away, ID) %>%
+    group_by(Round, Home, Away) %>%
+    mutate(
+      run_id = cumsum(c(TRUE, diff(Points_Difference) != 0 | Outcome[-1] != Outcome[-n()])),
+      n_same = ave(run_id, run_id, FUN = length)
+    ) %>%
+    ungroup() %>%
+    mutate(
+      meter_line = as.numeric(lookup[Location]),
+      match_id = paste(Round, Home, Away, sep = "__")
+    )
+
+  lineout_df
+}
+
+lineout_full <- build_lineout_dataset(
+  phase_points_df = phase_points,
+  winpct_prior_games = winpct_prior_games
+)
 
 class_levels <- sort(unique(lineout_full$points))
 meter_levels <- sort(unique(lineout_full$meter_line))
@@ -267,6 +277,43 @@ lineout_cv_summary <- lineout_cv_raw %>%
       TRUE ~ 99L
     )
   )
+
+# sensitivity to pre-specified win-percentage prior games m
+winpct_prior_grid <- c(0.5, 1, 2, 4, 8)
+lineout_baseline_spec <- lineout_models[[which(vapply(lineout_models, function(x) x$key == "lineout_baseline", logical(1)))]]
+
+winpct_prior_sensitivity <- bind_rows(lapply(winpct_prior_grid, function(m_prior) {
+  lineout_m <- build_lineout_dataset(
+    phase_points_df = phase_points,
+    winpct_prior_games = m_prior
+  )
+
+  cv_m <- evaluate_lineout_model(
+    df = lineout_m,
+    model_spec = lineout_baseline_spec,
+    k_folds = 5
+  )
+
+  tibble(
+    prior_games = m_prior,
+    cv_log_loss = mean(cv_m$log_loss, na.rm = TRUE),
+    cv_brier = mean(cv_m$brier, na.rm = TRUE),
+    folds_used = nrow(cv_m)
+  )
+}))
+
+m2_log_loss <- winpct_prior_sensitivity %>%
+  filter(abs(prior_games - 2) < 1e-8) %>%
+  pull(cv_log_loss)
+
+winpct_prior_sensitivity <- winpct_prior_sensitivity %>%
+  mutate(
+    delta_log_loss_vs_m2 = cv_log_loss - m2_log_loss[1],
+    cv_log_loss = round(cv_log_loss, 4),
+    cv_brier = round(cv_brier, 4),
+    delta_log_loss_vs_m2 = round(delta_log_loss_vs_m2, 4)
+  ) %>%
+  arrange(prior_games)
 
 lineout_ref <- sample_one_per_run(lineout_full) %>%
   mutate(
@@ -442,6 +489,7 @@ write.csv(kick_cv_raw, "data/kick_model_sensitivity_folds.csv", row.names = FALS
 write.csv(model_sensitivity, "data/model_sensitivity_summary.csv", row.names = FALSE)
 write.csv(lineout_ep_sensitivity, "data/lineout_model_ep_sensitivity.csv", row.names = FALSE)
 write.csv(kick_fits, "data/kick_model_marker_sensitivity.csv", row.names = FALSE)
+write.csv(winpct_prior_sensitivity, "data/winpct_prior_sensitivity.csv", row.names = FALSE)
 
 table_rows <- apply(model_sensitivity, 1, function(r) {
   sprintf(
@@ -477,10 +525,56 @@ table_lines <- c(
 
 writeLines(table_lines, "paper/appendix_model_sensitivity.tex")
 
+format_prior_games <- function(x) {
+  if (abs(x - round(x)) < 1e-8) {
+    as.character(as.integer(round(x)))
+  } else {
+    format(x, trim = TRUE, nsmall = 1)
+  }
+}
+
+prior_rows <- vapply(seq_len(nrow(winpct_prior_sensitivity)), function(i) {
+  r <- winpct_prior_sensitivity[i, ]
+  sprintf(
+    "%s & %.4f & %.4f & %.4f \\\\",
+    format_prior_games(as.numeric(r$prior_games)),
+    as.numeric(r$cv_log_loss),
+    as.numeric(r$cv_brier),
+    as.numeric(r$delta_log_loss_vs_m2)
+  )
+}, character(1))
+
+prior_table_lines <- c(
+  "\\begin{table}[htbp]",
+  "\\centering",
+  "\\caption{Sensitivity of baseline lineout performance to the running win-percentage shrinkage prior $m$ (grouped 5-fold CV).}",
+  "\\label{tab:winpct-prior-sensitivity}",
+  "\\resizebox{0.75\\linewidth}{!}{%",
+  "\\begin{tabular}{lccc}",
+  "\\toprule",
+  "$m$ pseudo-games & CV log loss & CV Brier & $\\Delta$ log loss vs $m=2$ \\\\",
+  "\\midrule",
+  prior_rows,
+  "\\bottomrule",
+  "\\end{tabular}",
+  "}",
+  "\\vspace{0.4em}",
+  "\\begin{minipage}{0.85\\linewidth}",
+  "\\footnotesize Primary pipeline uses pre-specified $m=2$. Sensitivity values vary $m \\in \\{0.5, 1, 2, 4, 8\\}$ while holding the lineout baseline specification fixed.",
+  "\\end{minipage}",
+  "\\end{table}"
+)
+
+writeLines(prior_table_lines, "paper/appendix_winpct_prior_sensitivity.tex")
+
 cat("\nModel sensitivity summary:\n")
 print(model_sensitivity)
+cat("\nWinPct prior sensitivity:\n")
+print(winpct_prior_sensitivity)
 cat("\nWrote:\n")
 cat("- data/model_sensitivity_summary.csv\n")
 cat("- data/lineout_model_ep_sensitivity.csv\n")
 cat("- data/kick_model_marker_sensitivity.csv\n")
+cat("- data/winpct_prior_sensitivity.csv\n")
 cat("- paper/appendix_model_sensitivity.tex\n")
+cat("- paper/appendix_winpct_prior_sensitivity.tex\n")

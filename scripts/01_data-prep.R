@@ -19,6 +19,9 @@ if (is.na(ep_seed)) {
 }
 set.seed(ep_seed)
 
+# pre-specified running win-percentage shrinkage prior (m pseudo-games at .500)
+winpct_prior_games <- 2
+
 #######################
 ### PHASE DATA LOAD ###
 #######################
@@ -93,7 +96,7 @@ last_play <- last_play %>%
   mutate(
     Games_Played = lag(row_number(), default = 0),
     Wins_Before = lag(cumsum(Win), default = 0),
-    WinPct_Before = if_else(Games_Played == 0, 0.5, Wins_Before / Games_Played)
+    WinPct_Before = (Wins_Before + 0.5 * winpct_prior_games) / (Games_Played + winpct_prior_games)
   ) %>%
   ungroup()
 
