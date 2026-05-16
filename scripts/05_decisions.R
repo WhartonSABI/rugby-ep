@@ -79,25 +79,66 @@ for (shift in y_shifts) {
     geom_raster(interpolate = TRUE) +
     scale_fill_gradient2(
       low = "#E76F51", mid = "white", high = "#457B9D",
-      midpoint = 0, name = "Lineout - Kick"
+      midpoint = 0,
+      name = expression(Delta * "EP (Lineout \u2212 Kick)"),
+      guide = guide_colorbar(
+        title.position = "top",
+        title.hjust = 0.5,
+        barwidth  = unit(10, "cm"),
+        barheight = unit(0.5, "cm")
+      )
     ) +
     coord_fixed() +
     labs(
-      title = paste0("Point Differential (y shift = ", shift, ")"),
       x = "Lateral position (m)",
-      y = "Distance from goal line (m)"
+      y = "Distance from own goal line (m)"
     ) +
-    theme_minimal(base_size = 14)
-
-  print(p)
+    theme_minimal(base_size = 13) +
+    theme(
+      legend.position  = if (is_last) "bottom" else "none",
+      legend.title     = element_text(size = 12, face = "bold"),
+      legend.text      = element_text(size = 10),
+      axis.title       = element_text(size = 11),
+      axis.text        = element_text(size = 9),
+      plot.title       = element_blank()   # title handled by subfigure caption in LaTeX
+    )
   
-  if (shift != 0) {
-    p <- p + theme(legend.position = "none")
-  }
-  
-  ggsave(paste0("plots/kick_vs_lineout_shift_", abs(shift), "m.png"),
-         plot = p, width = 10, height = 8, dpi = 300)
+  ggsave(
+    paste0("plots/kick_vs_lineout_shift_", abs(shift), "m.png"),
+    plot  = p,
+    width = if (is_last) 10 else 10,   # widen last panel if needed to fit legend
+    height = if (is_last) 9 else 8,
+    dpi   = 300
+  )
 }
+
+# Legend
+
+library(ggpubr)
+
+# build a full plot with the legend
+legend_plot <- ggplot(grid, aes(x = x, y = y, fill = point_diff)) +
+  geom_raster() +
+  scale_fill_gradient2(
+    low = "#E76F51", mid = "white", high = "#457B9D",
+    midpoint = 0,
+    name = expression(Delta * "EP (Lineout - Kick)"),
+    guide = guide_colorbar(
+      title.position = "top",
+      title.hjust = 0.5,
+      barwidth  = unit(20, "cm"),
+      barheight = unit(0.8, "cm")
+    )
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# extract just the legend
+legend_only <- as_ggplot(get_legend(legend_plot))
+
+ggsave("plots/kick_vs_lineout_legend.png",
+       plot = legend_only,
+       width = 8, height = 1.5, dpi = 300)
 
 ######################
 ### LINEOUT SHIFTS ###
