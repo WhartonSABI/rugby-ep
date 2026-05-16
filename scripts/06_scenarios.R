@@ -1,15 +1,9 @@
 # run from project root; depends on 05_decisions.R
 source("scripts/05_decisions.R")
 
-##########################
-### SITUATION ANALYSIS ###
-##########################
-
-# scenario 1: no card or win percentage difference
-
 y_shift <- -20
 
-# build baseline shifted lineout minus kick surface
+# --- baseline ---
 grid_scenario <- grid %>%
   mutate(
     lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0, less_than_2_min = 0),
@@ -17,214 +11,142 @@ grid_scenario <- grid %>%
     point_diff = lineout_ep_shifted - kick_ep
   )
 
-# baseline scenario
 baseline_points_diff <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
-    low = "#E76F51",
-    mid = "white",
-    high = "#457B9D",
-    midpoint = 0,
-    name = "Lineout - Kick"
+    low = "#E76F51", mid = "white", high = "#457B9D",
+    midpoint = 0, name = "Lineout - Kick"
   ) +
   coord_fixed() +
-  labs(
-    title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
-    subtitle = "Baseline: Card_Diff = 0, WinPct_Diff = 0, Less_Than_2_Min = 0",
-    x = "Lateral position (m)",
-    y = "Distance from goal line (m)"
-  ) +
-  theme_minimal(base_size = 14)
+  labs(x = "Lateral position (m)", y = "Distance from goal line (m)") +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
 
 ggsave("plots/baseline_points_diff.png", baseline_points_diff,
        width = 10, height = 8, dpi = 300)
 
-# baseline scenario with marker
-
-marker_x <- 16
-marker_y <- 40
-
+# --- baseline with marker ---
 baseline_with_marker <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
-  geom_point(aes(x = marker_x, y = marker_y), shape = 4, color = "black", size = 4, stroke = 1.5)+
+  geom_point(aes(x = 16, y = 40), shape = 4, color = "black", size = 4, stroke = 1.5) +
   scale_fill_gradient2(
-    low = "#E76F51",
-    mid = "white",
-    high = "#457B9D",
-    midpoint = 0,
-    name = "Lineout - Kick"
+    low = "#E76F51", mid = "white", high = "#457B9D",
+    midpoint = 0, name = "Lineout - Kick"
   ) +
   coord_fixed() +
-  labs(
-    title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
-    subtitle = "Baseline: Card_Diff = 0, WinPct_Diff = 0, Less_Than_2_Min = 0",
-    x = "Lateral position (m)",
-    y = "Distance from goal line (m)"
-  ) +
-  theme_minimal(base_size = 14)
+  labs(x = "Lateral position (m)", y = "Distance from goal line (m)") +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
 
 ggsave("plots/baseline_with_marker.png", baseline_with_marker,
        width = 10, height = 8, dpi = 300)
 
-# inspect ep values at marker point
 marker_values <- grid_scenario %>%
-  mutate(dist = abs(x - marker_x) + abs(y - marker_y)) %>%
+  mutate(dist = abs(x - 16) + abs(y - 40)) %>%
   slice_min(dist, n = 1) %>%
   select(point_diff, kick_ep, lineout_ep_shifted)
 
 marker_values
 
-# scenario 2: yellow cards
-
+# --- opponent yellow card ---
 grid_scenario <- grid %>%
   mutate(
-    lineout_ep = lineout_ep_at_y(y, card_diff = 1, win_pct_diff = 0, less_than_2_min = 0),
     lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 1, win_pct_diff = 0, less_than_2_min = 0),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
-# opponent yellow card
 opponent_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
-    low = "#E76F51",
-    mid = "white",
-    high = "#457B9D",
-    midpoint = 0,
-    name = "Lineout - Kick"
+    low = "#E76F51", mid = "white", high = "#457B9D",
+    midpoint = 0, name = "Lineout - Kick"
   ) +
   coord_fixed() +
-  labs(
-    title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
-    x = "Lateral position (m)",
-    y = "Distance from goal line (m)"
-  ) +
+  labs(x = "Lateral position (m)", y = "Distance from goal line (m)") +
   theme_minimal(base_size = 14) +
   theme(legend.position = "none")
 
 ggsave("plots/opponent_yellow.png", opponent_yellow,
        width = 10, height = 8, dpi = 300)
 
-
-# reset to neutral card state
+# --- no yellow card ---
 grid_scenario <- grid %>%
   mutate(
-    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0, less_than_2_min = 0),
     lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = 0, less_than_2_min = 0),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
-# no yellow card difference
 no_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
-    low = "#E76F51",
-    mid = "white",
-    high = "#457B9D",
-    midpoint = 0,
-    name = "Lineout - Kick"
+    low = "#E76F51", mid = "white", high = "#457B9D",
+    midpoint = 0, name = "Lineout - Kick"
   ) +
   coord_fixed() +
-  labs(
-    title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
-    x = "Lateral position (m)",
-    y = "Distance from goal line (m)"
-  ) +
-  theme_minimal(base_size = 14)
+  labs(x = "Lateral position (m)", y = "Distance from goal line (m)") +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
 
 ggsave("plots/no_yellow.png", no_yellow,
        width = 10, height = 8, dpi = 300)
 
-
-# set own yellow card disadvantage
-
+# --- own yellow card ---
 grid_scenario <- grid %>%
   mutate(
-    lineout_ep = lineout_ep_at_y(y, card_diff = -1, win_pct_diff = 0, less_than_2_min = 0),
     lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = -1, win_pct_diff = 0, less_than_2_min = 0),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
-# own yellow card
 own_yellow <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
-    low = "#E76F51",
-    mid = "white",
-    high = "#457B9D",
-    midpoint = 0,
-    name = "Lineout - Kick"
+    low = "#E76F51", mid = "white", high = "#457B9D",
+    midpoint = 0, name = "Lineout - Kick"
   ) +
   coord_fixed() +
-  labs(
-    title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
-    x = "Lateral position (m)",
-    y = "Distance from goal line (m)"
-  ) +
+  labs(x = "Lateral position (m)", y = "Distance from goal line (m)") +
   theme_minimal(base_size = 14) +
   theme(legend.position = "none")
 
 ggsave("plots/own_yellow.png", own_yellow,
        width = 10, height = 8, dpi = 300)
 
-
-# scenario 3: team quality
-
+# --- lower-quality team ---
 grid_scenario <- grid %>%
   mutate(
-    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = -0.25, less_than_2_min = 0),
     lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = -0.25, less_than_2_min = 0),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
-# lower-quality team
 bad_team <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
-    low = "#E76F51",
-    mid = "white",
-    high = "#457B9D",
-    midpoint = 0,
-    name = "Lineout - Kick"
+    low = "#E76F51", mid = "white", high = "#457B9D",
+    midpoint = 0, name = "Lineout - Kick"
   ) +
   coord_fixed() +
-  labs(
-    title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
-    x = "Lateral position (m)",
-    y = "Distance from goal line (m)"
-  ) +
+  labs(x = "Lateral position (m)", y = "Distance from goal line (m)") +
   theme_minimal(base_size = 14) +
   theme(legend.position = "none")
 
 ggsave("plots/bad_team.png", bad_team,
        width = 10, height = 8, dpi = 300)
 
-
-# set higher win percentage differential
-
+# --- higher-quality team ---
 grid_scenario <- grid %>%
   mutate(
-    lineout_ep = lineout_ep_at_y(y, card_diff = 0, win_pct_diff = 0.25, less_than_2_min = 0),
     lineout_ep_shifted = lineout_ep_at_y(y + y_shift, card_diff = 0, win_pct_diff = 0.25, less_than_2_min = 0),
     point_diff = lineout_ep_shifted - kick_ep
   )
 
-# higher-quality team
 good_team <- ggplot(grid_scenario, aes(x = x, y = y, fill = point_diff)) +
   geom_tile() +
   scale_fill_gradient2(
-    low = "#E76F51",
-    mid = "white",
-    high = "#457B9D",
-    midpoint = 0,
-    name = "Lineout - Kick"
+    low = "#E76F51", mid = "white", high = "#457B9D",
+    midpoint = 0, name = "Lineout - Kick"
   ) +
   coord_fixed() +
-  labs(
-    title = paste("Point Difference (Lineout - Kick) with Y-shift =", abs(y_shift), "m"),
-    x = "Lateral position (m)",
-    y = "Distance from goal line (m)"
-  ) +
+  labs(x = "Lateral position (m)", y = "Distance from goal line (m)") +
   theme_minimal(base_size = 14) +
   theme(legend.position = "none")
 
